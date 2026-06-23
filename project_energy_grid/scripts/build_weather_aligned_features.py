@@ -1,65 +1,154 @@
-"""Aggregate IPMA station observations and quantify overlap with E-REDES history."""
+"""Build historically aligned hourly weather features.
+
+Priority:
+1. Open-Meteo historical hourly reanalysis, if available.
+2. IPMA recent observations fallback, if Open-Meteo is missing.
+
+The Open-Meteo layer is used only to solve historical alignment for 2024–2025.
+IPMA remains the official Portuguese source for warnings/current observations.
+"""
 
 from __future__ import annotations
 
-import logging
+from pathlib import Path
 
 import pandas as pd
 
-from src.config import GOLD_DATA_DIR, REPORTS_DIR, configure_logging
-from src.utils.io import save_dataframe
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RAW_OPEN_METEO = PROJECT_ROOT / "data/raw/open_meteo/open_meteo_historical_hourly.parquet"
+RAW_OPEN_METEO_CSV = PROJECT_ROOT / "data/raw/open_meteo/open_meteo_historical_hourly.csv"
+RAW_IPMA = PROJECT_ROOT / "data/silver/ipma_observations.parquet"
 
-LOGGER = logging.getLogger(__name__)
-MIN_USABLE_OVERLAP_HOURS = 24 * 30
+GOLD_DIR = PROJECT_ROOT / "data/gold"
+REPORT_DIR = PROJECT_ROOT / "reports/weather"
 
-CONTINUOUS = [
-    "temperatura", "radiacao", "intensidadeventokm", "precacumulada",
-    "humidade", "pressao", "hdd_18", "cdd_22",
-]
-FLAGS = ["heavy_rain_flag", "strong_wind_flag"]
+OUTPUT_WEATHER = GOLD_DIR / "gold_weather_features_hourly.parquet"
+OUTPUT_SUMMARY = REPORT_DIR / "weather_alignment_summary.csv"
+OUTPUT_OPEN_METEO_SUMMARY = REPORT_DIR / "open_meteo_alignment_summary.csv"
+
+
+def _load_open_meteo() -> pd.DataFrame | None:
+    if RAW_OPEN_METEO.exists():
+        return pd.read_parquet(RAW_OPEN_METEO)
+    if RAW_OPEN_METEO_CSV.exists():
+        return pd.read_csv(RAW_OPEN_METEO_CSV)
+    return None
+
+
+def _build_from_open_meteo(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
+    df = df.dropna(subset=["datetime"])
+
+    grouped = df.groupby("datetime", as_index=False)
+
+    result = pd.DataFrame({
+        "datetime": grouped["datetime"].first()["datetime"],
+        "temperatura": grouped["temperature_2m"].mean()["temperature_2m"],
+        "humidade": grouped["relative_humidity_2m"].mean()["relative_humidity_2m"],
+        "precacumulada": grouped["precipitation"].mean()["precipitation"],
+        "rain": grouped["rain"].mean()["rain"],
+        "intensidadeventokm": grouped["wind_speed_10m"].mean()["wind_speed_10m"],
+        "wind_gusts_10m": grouped["wind_gusts_10m"].mean()["wind_gusts_10m"],
+        "radiacao": grouped["shortwave_radiation"].mean()["shortwave_radiation"],
+        "pressao": grouped["surface_pressure"].mean()["surface_pressure"],
+        "cloud_cover": grouped["cloud_cover"].mean()["cloud_cover"],
+        "open_meteo_locations": grouped["location"].nunique()["location"],
+    })
+
+    result = result.sort_values("datetime").reset_index(drop=True)
+
+    result["hdd_18"] = (18 - result["temperatura"]).clip(lower=0)
+    result["cdd_22"] = (result["temperatura"] - 22).clip(lower=0)
+
+    # Simple explainable operational weather flags.
+    result["heavy_rain_flag"] = result["precacumulada"].ge(5.0)
+    result["strong_wind_flag"] = result["wind_gusts_10m"].ge(50.0) | result["intensidadeventokm"].ge(40.0)
+
+    result["weather_available"] = True
+    result["weather_source"] = "open_meteo_reanalysis"
+
+    return result
+
+
+def _build_from_ipma(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
+    df = df.dropna(subset=["datetime"])
+
+    # Aggregate station-level recent observations to one national proxy hour.
+    numeric_cols = [
+        "temperatura",
+        "radiacao",
+        "precacumulada",
+        "intensidadeventokm",
+        "humidade",
+        "pressao",
+    ]
+
+    available = [col for col in numeric_cols if col in df.columns]
+    result = df.groupby("datetime", as_index=False)[available].mean()
+
+    result["hdd_18"] = (18 - result["temperatura"]).clip(lower=0) if "temperatura" in result else 0
+    result["cdd_22"] = (result["temperatura"] - 22).clip(lower=0) if "temperatura" in result else 0
+    result["heavy_rain_flag"] = result.get("precacumulada", pd.Series(0, index=result.index)).ge(5.0)
+    result["strong_wind_flag"] = result.get("intensidadeventokm", pd.Series(0, index=result.index)).ge(40.0)
+    result["weather_available"] = True
+    result["weather_source"] = "ipma_recent_observations"
+
+    return result.sort_values("datetime").reset_index(drop=True)
+
+
+def _overlap_hours(weather: pd.DataFrame, energy_path: Path) -> int:
+    if not energy_path.exists():
+        return 0
+    energy = pd.read_parquet(energy_path, columns=["datetime"])
+    weather_dt = set(pd.to_datetime(weather["datetime"], utc=True))
+    energy_dt = set(pd.to_datetime(energy["datetime"], utc=True))
+    return len(weather_dt.intersection(energy_dt))
 
 
 def main() -> None:
-    configure_logging()
-    source = GOLD_DATA_DIR / "gold_weather_hourly.parquet"
-    if not source.exists():
-        raise FileNotFoundError(f"Missing weather source: {source}")
-    weather = pd.read_parquet(source)
-    if "datetime" not in weather.columns:
-        raise ValueError("Weather source has no datetime column")
-    weather["datetime"] = pd.to_datetime(weather["datetime"], errors="coerce", utc=True).dt.floor("h")
-    continuous = [column for column in CONTINUOUS if column in weather.columns]
-    flags = [column for column in FLAGS if column in weather.columns]
-    aggregations = {column: "mean" for column in continuous} | {column: "max" for column in flags}
-    hourly = weather.dropna(subset=["datetime"]).groupby("datetime", as_index=False).agg(aggregations)
-    save_dataframe(hourly, GOLD_DATA_DIR / "gold_weather_features_hourly.parquet")
+    GOLD_DIR.mkdir(parents=True, exist_ok=True)
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-    rows = []
-    weather_times = pd.Index(hourly["datetime"])
-    for dataset in ("consumption", "injection"):
-        path = GOLD_DATA_DIR / f"gold_{dataset}_hourly.parquet"
-        energy = pd.read_parquet(path, columns=["datetime"])
-        energy_times = pd.DatetimeIndex(pd.to_datetime(energy["datetime"], errors="coerce", utc=True))
-        overlap = energy_times.intersection(weather_times)
-        rows.append(
-            {
-                "dataset": dataset,
-                "energy_rows": len(energy),
-                "energy_start": energy_times.min(),
-                "energy_end": energy_times.max(),
-                "weather_source_rows": len(weather),
-                "weather_hourly_rows": len(hourly),
-                "weather_start": hourly["datetime"].min(),
-                "weather_end": hourly["datetime"].max(),
-                "overlap_hours": len(overlap),
-                "overlap_pct": len(overlap) / len(energy) * 100 if len(energy) else 0.0,
-                "usable_for_historical_modelling": len(overlap) >= MIN_USABLE_OVERLAP_HOURS,
-            }
-        )
-    output = REPORTS_DIR / "weather"
-    output.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(output / "weather_alignment_summary.csv", index=False)
-    LOGGER.info("Weather aggregation rows=%s coverage=%s..%s", len(hourly), hourly.datetime.min(), hourly.datetime.max())
+    open_meteo = _load_open_meteo()
+
+    if open_meteo is not None:
+        weather = _build_from_open_meteo(open_meteo)
+        source = "open_meteo_reanalysis"
+    elif RAW_IPMA.exists():
+        weather = _build_from_ipma(pd.read_parquet(RAW_IPMA))
+        source = "ipma_recent_observations"
+    else:
+        raise FileNotFoundError("No Open-Meteo or IPMA weather source available")
+
+    weather.to_parquet(OUTPUT_WEATHER, index=False)
+
+    overlap_consumption = _overlap_hours(weather, GOLD_DIR / "gold_consumption_hourly.parquet")
+    overlap_injection = _overlap_hours(weather, GOLD_DIR / "gold_injection_hourly.parquet")
+    overlap_hours = max(overlap_consumption, overlap_injection)
+
+    summary = pd.DataFrame([{
+        "weather_source": source,
+        "weather_hourly_rows": len(weather),
+        "weather_start": weather["datetime"].min(),
+        "weather_end": weather["datetime"].max(),
+        "duplicate_timestamps": int(pd.to_datetime(weather["datetime"], utc=True).duplicated().sum()),
+        "overlap_hours": overlap_hours,
+        "overlap_hours_consumption": overlap_consumption,
+        "overlap_hours_injection": overlap_injection,
+        "usable_for_historical_modelling": bool(overlap_hours >= 24 * 365),
+        "weather_available_true_rows": int(weather["weather_available"].sum()),
+        "heavy_rain_hours": int(weather["heavy_rain_flag"].sum()),
+        "strong_wind_hours": int(weather["strong_wind_flag"].sum()),
+    }])
+
+    summary.to_csv(OUTPUT_SUMMARY, index=False)
+    summary.to_csv(OUTPUT_OPEN_METEO_SUMMARY, index=False)
+
+    print("Weather alignment completed")
+    print(summary.to_string(index=False))
 
 
 if __name__ == "__main__":

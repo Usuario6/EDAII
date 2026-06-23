@@ -10,13 +10,13 @@ Horizons: 1, 6, 24, and 168 hours. Models: seasonal naive, Ridge, LASSO, Random 
 
 ```text
     dataset  horizon          scenario             model        mae       rmse   mape    r2
-consumption        1         with_lag1     random_forest  35650.532  53134.939  2.351 0.963
+consumption        1  weather_enriched     random_forest  34623.878  51690.224  2.295 0.965
 consumption        6         with_lag1     random_forest  51435.786  76913.843  3.348 0.923
 consumption       24         with_lag1     random_forest  57737.438  85133.364  3.747 0.905
-consumption      168 calendar_seasonal     random_forest  75541.790 100974.608  4.872 0.867
-  injection        1         with_lag1             lasso 101310.530 134381.599 11.745 0.938
+consumption      168  weather_enriched     random_forest  71841.296  99941.940  4.634 0.870
+  injection        1  weather_enriched             lasso 101409.099 133984.679 11.895 0.938
   injection        6         with_lag1 gradient_boosting 255590.222 323869.077 33.554 0.639
-  injection       24         with_lag1             ridge 395163.486 491312.828 54.744 0.170
+  injection       24  weather_enriched             ridge 390146.358 487494.360 54.341 0.183
   injection      168 calendar_seasonal             ridge 444514.461 529807.291 63.046 0.036
 ```
 
@@ -39,9 +39,9 @@ consumption      168            7.74             7.23
 ```text
 horizon
 1       0.00
-6      44.75
-24     60.22
-168    90.03
+6      48.80
+24     64.70
+168    93.35
 ```
 
 ### Injection degradation by horizon
@@ -49,13 +49,13 @@ horizon
 ```text
 horizon
 1        0.00
-6      141.01
-24     265.61
-168    294.26
+6      141.72
+24     263.84
+168    295.42
 ```
 
 ## Weather and recommendation
 
-Historically aligned weather features were not usable for this experiment. No weather values were force-filled across the 2024–2025 interval.
+Historically aligned weather features were usable for this experiment. No weather values were force-filled across the 2024–2025 interval.
 Use the strongest with-lag model for next-hour nowcasting. For operational horizons where lag 1 is unavailable, select from the without-lag or calendar/seasonal scenarios and treat the performance loss as the realistic forecast cost.
 Limitations: one chronological holdout, a bounded two-year energy window, no historically overlapping weather, and no holiday-locality features beyond national Portuguese holidays.
