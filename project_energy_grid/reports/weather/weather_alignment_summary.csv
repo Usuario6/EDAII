@@ -1,0 +1,3 @@
+dataset,energy_rows,energy_start,energy_end,weather_source_rows,weather_hourly_rows,weather_start,weather_end,overlap_hours,overlap_pct,usable_for_historical_modelling
+consumption,17544,2024-01-01 00:00:00+00:00,2025-12-31 23:00:00+00:00,5328,24,2026-06-22 06:00:00+00:00,2026-06-23 05:00:00+00:00,0,0.0,False
+injection,17544,2024-01-01 00:00:00+00:00,2025-12-31 23:00:00+00:00,5328,24,2026-06-22 06:00:00+00:00,2026-06-23 05:00:00+00:00,0,0.0,False

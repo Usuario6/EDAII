@@ -8,6 +8,7 @@ Current status:
 - Bounded E-REDES historical extraction, cleaning, silver generation, gold generation, and EDA reporting are implemented.
 - Chronological hourly baselines and the EDL II course analysis methods are implemented.
 - Rolling-origin backtesting and lag-dominance robustness checks are implemented.
+- Direct 1-, 6-, 24-, and 168-hour forecasting experiments are implemented.
 - No final model or dashboard is implemented yet.
 
 ## Data sources
@@ -74,6 +75,11 @@ python -m scripts.backtest_consumption
 python -m scripts.backtest_injection
 python -m scripts.robustness_checks
 python -m scripts.validate_backtesting
+python -m scripts.build_weather_aligned_features
+python -m scripts.build_gold_enriched
+python -m scripts.multistep_consumption
+python -m scripts.multistep_injection
+python -m scripts.validate_multistep
 ```
 
 The validation prints each HTTP status, shape, column list, and first rows, then writes CSV and Parquet samples under `data/raw/e_redes/` and `data/raw/ipma/`.
@@ -161,8 +167,38 @@ python -m scripts.robustness_checks
 python -m scripts.validate_backtesting
 ```
 
+## Multi-step forecasting
+
+Direct forecasting creates a separate target for 1, 6, 24, and 168 hours ahead. Every model uses only values known at the forecast origin plus calendar features for the future timestamp. Experiments compare with-lag-1, without-lag-1, calendar/seasonal, and seasonal-naive scenarios using a chronological 80/20 holdout. The full scenario grid uses a single holdout because repeating all horizon/scenario combinations over 41 rolling folds is currently too expensive.
+
+Calendar enrichment uses `Europe/Lisbon` civil time and includes Portuguese national holidays for 2024–2025, workday/weekend flags, day/week/quarter/season indicators, month-boundary flags, and cyclical hour/day-of-year encodings.
+
+Current direct-model candidates:
+
+- Next-hour consumption: Random Forest with lag 1 — MAE `35,650.53`, RMSE `53,134.94`, R2 `0.963`.
+- Next-hour injection: LASSO with lag 1 — MAE `101,310.53`, RMSE `134,381.60`, R2 `0.938`.
+- 24-hour consumption: Random Forest with lag 1 — MAE `57,737.44`, RMSE `85,133.36`, R2 `0.905`.
+- 24-hour injection: Ridge with lag 1 — MAE `395,163.49`, RMSE `491,312.83`, R2 `0.170`.
+
+Removing lag 1 increases average next-hour RMSE by approximately 55% for consumption and 159% for injection. Dependence falls at longer horizons, but injection accuracy degrades substantially beyond the next-hour case. Results should therefore distinguish short-term nowcasting from operational multi-step forecasting.
+
+IPMA observations aggregate to only 24 recent hours (`2026-06-22 06:00` through `2026-06-23 05:00`) and have zero overlap with the 2024–2025 E-REDES interval. Weather columns remain optional, `weather_available` is false for historical rows, and no weather data is extrapolated or force-filled.
+
+Reproduce enrichment and direct forecasting:
+
+```bash
+python -m scripts.build_weather_aligned_features
+python -m scripts.build_gold_enriched
+python -m scripts.multistep_consumption
+python -m scripts.multistep_injection
+python -m scripts.validate_multistep
+```
+
+Outputs are stored under `reports/weather/` and `reports/multistep/`.
+
 ## Next steps
 
 - Acquire historically aligned IPMA observations before adding weather features.
-- Add holiday and calendar-event features, then rerun the same rolling-origin folds.
-- Evaluate direct multi-step forecasts where lag 1 is not available at prediction time.
+- Add local or exceptional calendar events beyond national holidays.
+- Run rolling-origin validation for the reduced set of winning direct-horizon models.
+- Investigate exogenous generation forecasts for injection beyond six hours.
