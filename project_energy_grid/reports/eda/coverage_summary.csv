@@ -1,0 +1,5 @@
+dataset,rows,columns,datetime_col,datetime_min,datetime_max,datetime_nulls
+gold_consumption,8644,15,datetime,2025-01-01 00:00:00+00:00,2025-03-31 23:45:00+00:00,0
+gold_injection,8644,17,datetime,2025-01-01 00:00:00+00:00,2025-03-31 23:45:00+00:00,0
+gold_weather_hourly,5328,12,datetime,2026-06-22 06:00:00,2026-06-23 05:00:00,0
+silver_production,8644,10,datetime,2025-01-01 00:00:00+00:00,2025-03-31 23:45:00+00:00,0

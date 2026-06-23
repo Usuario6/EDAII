@@ -1,0 +1,3 @@
+dataset,rows,iqr_outlier,zscore_outlier,isolation_forest_outlier,any_outlier
+consumption,2160,1,1,44,44
+injection,2160,0,0,44,44

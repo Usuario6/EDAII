@@ -51,7 +51,10 @@ def add_rolling_features(
     numeric_target = pd.to_numeric(result[target_col], errors="coerce")
     for window in windows:
         if isinstance(window, int) and window > 0:
-            result[f"{target_col}_rollmean_{window}"] = numeric_target.rolling(window=window, min_periods=1).mean()
+            # Shift first so the current target is never used to predict itself.
+            result[f"{target_col}_rollmean_{window}"] = (
+                numeric_target.shift(1).rolling(window=window, min_periods=1).mean()
+            )
     return result
 
 

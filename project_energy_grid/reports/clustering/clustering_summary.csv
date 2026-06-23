@@ -1,0 +1,5 @@
+dataset,method,clusters,noise_points,silhouette,features
+consumption,kmeans,3,0,0.23224948907559526,"hour,dayofweek,month,total,total_rollmean_24,total_rollmean_168"
+consumption,dbscan,14,145,-0.0057359188170452305,"hour,dayofweek,month,total,total_rollmean_24,total_rollmean_168"
+injection,kmeans,3,0,0.20532774762684516,"hour,dayofweek,month,total_injection,total_injection_rollmean_24,total_injection_rollmean_168"
+injection,dbscan,41,56,0.06738878544190702,"hour,dayofweek,month,total_injection,total_injection_rollmean_24,total_injection_rollmean_168"

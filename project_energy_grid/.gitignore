@@ -3,7 +3,6 @@ data/raw/
 data/silver/
 data/gold/
 *.parquet
-*.csv
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
