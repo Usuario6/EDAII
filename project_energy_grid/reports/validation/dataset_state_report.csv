@@ -1,0 +1,15 @@
+dataset,path,exists,rows,columns,datetime_col,datetime_min,datetime_max,duplicate_timestamps,missing_target,missing_target_pct,status
+raw_consumption,data/raw/e_redes/e_redes_consumption_window.parquet,True,70088,11,datahora,2024-01-01 00:00:00+00:00,2025-12-31 23:45:00+00:00,16,0.0,0.0,ok
+raw_injection,data/raw/e_redes/e_redes_grid_injection_window.parquet,True,70184,12,datahora,2024-01-01 00:00:00+00:00,2025-12-31 23:45:00+00:00,16,,,ok
+raw_production,data/raw/e_redes/e_redes_production_window.parquet,True,70184,9,datahora,2024-01-01 00:00:00+00:00,2025-12-31 23:45:00+00:00,16,0.0,0.0,ok
+silver_consumption,data/silver/e_redes_consumption.parquet,True,70088,12,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:45:00+00:00,16,0.0,0.0,ok
+silver_injection,data/silver/e_redes_injection.parquet,True,70184,13,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:45:00+00:00,16,,,missing target column total_injection
+silver_production,data/silver/e_redes_production.parquet,True,70184,10,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:45:00+00:00,16,0.0,0.0,ok
+gold_consumption,data/gold/gold_consumption.parquet,True,70088,15,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:45:00+00:00,16,0.0,0.0,ok
+gold_injection,data/gold/gold_injection.parquet,True,70184,17,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:45:00+00:00,16,0.0,0.0,ok
+gold_consumption_hourly,data/gold/gold_consumption_hourly.parquet,True,17544,15,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:00:00+00:00,0,25.0,0.1425,ok
+gold_injection_hourly,data/gold/gold_injection_hourly.parquet,True,17544,17,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:00:00+00:00,0,2.0,0.0114,ok
+gold_consumption_enriched,data/gold/gold_consumption_enriched.parquet,True,17544,38,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:00:00+00:00,0,25.0,0.1425,ok
+gold_injection_enriched,data/gold/gold_injection_enriched.parquet,True,17544,40,datetime,2024-01-01 00:00:00+00:00,2025-12-31 23:00:00+00:00,0,2.0,0.0114,ok
+gold_weather_hourly,data/gold/gold_weather_hourly.parquet,True,5328,12,datetime,2026-06-22 06:00:00+00:00,2026-06-23 05:00:00+00:00,5304,,,ok
+gold_weather_features_hourly,data/gold/gold_weather_features_hourly.parquet,True,24,11,datetime,2026-06-22 06:00:00+00:00,2026-06-23 05:00:00+00:00,0,,,ok
