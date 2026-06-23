@@ -33,6 +33,7 @@ Completed:
 - Operational-risk proxy scoring.
 - Interactive Streamlit dashboard.
 - Validation scripts for pipeline, class methods, backtesting, multi-step forecasting, risk scoring and dashboard.
+- Google Colab usage instructions for cloning, rebuilding data, or using cached data from Google Drive.
 
 Important limitation:
 
@@ -477,6 +478,123 @@ Recommended presentation order:
 5. Weather alignment
 6. Data quality
 7. Methodology disclaimer
+
+## Google Colab usage
+
+The repository can be cloned and executed in Google Colab, but only the code and committed reports are available through Git.
+
+The runtime datasets under `data/` are ignored by Git. Therefore, in Colab the data must either be:
+
+1. rebuilt from the APIs; or
+2. copied from Google Drive if the local `data/` folder was previously uploaded there.
+
+### Clone the repository in Colab
+
+For a public repository:
+
+```bash
+!git clone https://github.com/Usuario6/EDAII.git
+%cd EDAII/Project/project_energy_grid
+!pip install -r requirements.txt
+```
+
+If the folder path is uncertain, locate it with:
+
+```bash
+!find . -maxdepth 5 -name "validate_pipeline.py"
+!find . -maxdepth 5 -name "README.md"
+```
+
+Then move into the folder that contains `scripts/`, `src/` and `requirements.txt`.
+
+### Clone a private repository
+
+If the GitHub repository is private, create a temporary GitHub token with repository read access and run:
+
+```python
+from getpass import getpass
+token = getpass("GitHub token: ")
+```
+
+```bash
+!git clone https://$token@github.com/Usuario6/EDAII.git
+%cd EDAII/Project/project_energy_grid
+!pip install -r requirements.txt
+```
+
+Do not hardcode or commit the token.
+
+### Option A: rebuild the data in Colab
+
+```bash
+!python -m scripts.validate_apis
+
+!python -m scripts.extract_e_redes_window \
+  --start-date 2024-01-01 \
+  --end-date 2025-12-31 \
+  --page-size 100 \
+  --max-pages 1000
+
+!python -m scripts.build_silver
+!python -m scripts.build_gold
+!python -m scripts.build_gold_hourly
+!python -m scripts.validate_pipeline
+
+!python -m scripts.extract_open_meteo_historical \
+  --start-date 2024-01-01 \
+  --end-date 2025-12-31
+
+!python -m scripts.build_weather_aligned_features
+!python -m scripts.build_gold_enriched
+
+!python -m scripts.multistep_consumption
+!python -m scripts.multistep_injection
+!python -m scripts.validate_multistep
+
+!python -m scripts.build_risk_score
+!python -m scripts.validate_risk_score
+```
+
+### Option B: use Google Drive for cached data
+
+If the `data/` folder was uploaded to Google Drive, mount Drive:
+
+```python
+from google.colab import drive
+drive.mount("/content/drive")
+```
+
+Copy the cached data into the cloned repository:
+
+```bash
+!cp -r /content/drive/MyDrive/project_energy_grid_data/data ./data
+```
+
+Then validate:
+
+```bash
+!python -m scripts.validate_pipeline
+!python -m scripts.validate_multistep
+!python -m scripts.validate_risk_score
+```
+
+### Dashboard note for Colab
+
+The Streamlit dashboard is intended to run locally:
+
+```bash
+streamlit run src/dashboard/app.py
+```
+
+Colab can be used for pipeline validation, model execution and report generation, but the dashboard is easier and more reliable to demonstrate from a local machine.
+
+### Colab compatibility checklist
+
+- Use only relative paths inside scripts.
+- Do not hardcode local paths such as `/mnt/shared/...`.
+- Rebuild `data/` from APIs or copy it from Google Drive.
+- Run scripts with `python -m scripts.script_name`.
+- Confirm `requirements.txt` includes all required packages, including `pandas`, `scikit-learn`, `pyarrow`, `requests`, `streamlit` and `plotly`.
 
 ## Repository structure
 
