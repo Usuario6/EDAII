@@ -324,14 +324,17 @@ def show_model_comparison(multistep: pd.DataFrame) -> None:
 
     best_by_scenario = data.loc[best_idx].sort_values(["horizon", "scenario"])
 
+    best_by_scenario["horizon_label"] = best_by_scenario["horizon"].astype(int).astype(str) + "h"
+
     fig = px.bar(
         best_by_scenario,
-        x="horizon",
+        x="horizon_label",
         y=metric,
         color="scenario",
         barmode="group",
         hover_data=["model", "mae", "rmse", "mape", "r2"],
         title=f"Best {metric.upper()} by horizon and scenario",
+        labels={"horizon_label": "Forecast horizon"},
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -440,6 +443,11 @@ def show_data_quality() -> None:
         ]
         available = [col for col in preferred_cols if col in validation.columns]
         st.dataframe(validation[available], use_container_width=True, hide_index=True)
+
+        st.caption(
+            "Note: the silver injection layer contains generation components; "
+            "the total_injection modelling target is created later in the gold layer."
+        )
 
     c1, c2, c3 = st.columns(3)
     c1.success("Pipeline validation: passed")
