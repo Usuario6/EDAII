@@ -51,6 +51,38 @@ RISK_COMPONENTS = [
     "weather_score",
 ]
 
+SCENARIO_LABELS = {
+    "with_lag1": "With lag-1",
+    "without_lag1": "Without lag-1",
+    "calendar_seasonal": "Calendar + seasonal",
+    "weather_enriched": "Weather enriched",
+    "seasonal_baseline": "Seasonal baseline",
+}
+
+
+def add_scenario_labels(df: pd.DataFrame) -> pd.DataFrame:
+    """Add presentation-friendly scenario labels."""
+    result = df.copy()
+    if "scenario" in result.columns:
+        result["scenario_label"] = result["scenario"].map(SCENARIO_LABELS).fillna(result["scenario"])
+    return result
+
+
+def interpret_rmse_delta_pct(value) -> str:
+    """Interpret weather-vs-baseline RMSE difference."""
+    if pd.isna(value):
+        return "n/a"
+    if value < -1:
+        return "Improved"
+    if value > 1:
+        return "Worse"
+    return "Similar"
+
+
+def clean_display_table(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace null display values with n/a for dashboard readability."""
+    return df.replace({None: "n/a"}).fillna("n/a")
+
 
 st.set_page_config(
     page_title="Portugal Energy Grid Analytics",
@@ -311,11 +343,12 @@ def show_model_comparison(multistep: pd.DataFrame) -> None:
         st.warning("Multi-step file does not contain the expected columns.")
         return
 
-    data = multistep.copy()
+    data = add_scenario_labels(multistep)
     for col in ["mae", "rmse", "mape", "r2", "horizon"]:
         data[col] = numeric(data[col])
 
     metric = st.selectbox("Metric", ["rmse", "mae", "mape", "r2"], index=0)
+    st.caption("Lower RMSE, MAE and MAPE are better. Higher R² is better.")
 
     if metric == "r2":
         best_idx = data.groupby(["horizon", "scenario"])["r2"].idxmax()
@@ -330,9 +363,9 @@ def show_model_comparison(multistep: pd.DataFrame) -> None:
         best_by_scenario,
         x="horizon_label",
         y=metric,
-        color="scenario",
+        color="scenario_label",
         barmode="group",
-        hover_data=["model", "mae", "rmse", "mape", "r2"],
+        hover_data=["scenario", "model", "mae", "rmse", "mape", "r2"],
         title=f"Best {metric.upper()} by horizon and scenario",
         labels={"horizon_label": "Forecast horizon"},
     )
@@ -345,12 +378,13 @@ def show_model_comparison(multistep: pd.DataFrame) -> None:
         best_horizon = data.loc[data.groupby("horizon")[metric].idxmin()].sort_values("horizon")
 
     st.dataframe(
-        best_horizon[["horizon", "scenario", "model", "mae", "rmse", "mape", "r2"]],
+        clean_display_table(best_horizon[["horizon", "scenario_label", "model", "mae", "rmse", "mape", "r2"]]),
         use_container_width=True,
         hide_index=True,
     )
 
     st.write("Weather scenario vs baseline")
+    st.caption("Negative RMSE delta means the weather-enriched model improved over the lag-1 baseline.")
 
     baseline = (
         data[data["scenario"] == "with_lag1"]
@@ -375,8 +409,9 @@ def show_model_comparison(multistep: pd.DataFrame) -> None:
         )
         comparison["rmse_delta"] = comparison["rmse_weather"] - comparison["rmse_baseline"]
         comparison["rmse_delta_pct"] = comparison["rmse_delta"] / comparison["rmse_baseline"] * 100
+        comparison["interpretation"] = comparison["rmse_delta_pct"].apply(interpret_rmse_delta_pct)
 
-        st.dataframe(comparison, use_container_width=True, hide_index=True)
+        st.dataframe(clean_display_table(comparison), use_container_width=True, hide_index=True)
     else:
         st.info("Baseline or weather-enriched scenario is missing.")
 
@@ -442,7 +477,7 @@ def show_data_quality() -> None:
             "status",
         ]
         available = [col for col in preferred_cols if col in validation.columns]
-        st.dataframe(validation[available], use_container_width=True, hide_index=True)
+        st.dataframe(clean_display_table(validation[available]), use_container_width=True, hide_index=True)
 
         st.caption(
             "Note: the silver injection layer contains generation components; "
