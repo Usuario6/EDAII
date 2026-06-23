@@ -32,7 +32,6 @@ def _build(source_name: str, output_name: str, target: str, value_cols: list[str
         .set_index("datetime")[available]
         .resample("1h")
         .mean()
-        .dropna(subset=[target])
         .reset_index()
     )
     hourly = add_time_features(hourly, "datetime")

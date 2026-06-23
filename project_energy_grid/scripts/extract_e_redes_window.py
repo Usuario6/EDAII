@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from src.config import E_REDES_API_BASE_URL, E_REDES_DATASETS, HTTP_TIMEOUT_SECONDS, RAW_DATA_DIR, configure_logging
 from src.utils.io import save_dataframe
@@ -16,6 +18,7 @@ from src.utils.io import save_dataframe
 LOGGER = logging.getLogger(__name__)
 WINDOW_DIR = RAW_DATA_DIR / "e_redes"
 MAX_API_PAGE_SIZE = 100
+CHUNK_DAYS = 31
 
 
 def _parse_date(value: str) -> date:
@@ -68,34 +71,57 @@ def extract_window(
     max_pages: int,
 ) -> pd.DataFrame:
     session = requests.Session()
+    retry = Retry(total=4, connect=4, read=4, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504))
+    session.mount("https://", HTTPAdapter(max_retries=retry))
     frames: list[pd.DataFrame] = []
-    where = _window_where(start_date, end_date)
     page_size = min(page_size, MAX_API_PAGE_SIZE)
+    pages_used = 0
+    chunk_start = start_date
 
-    for page in range(max_pages):
-        offset = page * page_size
-        params = {
-            "limit": page_size,
-            "offset": offset,
-            "where": where,
-            "order_by": "datahora",
-        }
-        LOGGER.info("Fetching %s page=%s offset=%s", dataset_id, page + 1, offset)
-        try:
-            status, frame = _fetch_page(session, dataset_id, params)
-        except Exception as exc:
-            LOGGER.error("Failed to fetch %s page=%s: %s", dataset_id, page + 1, exc)
-            break
-        LOGGER.info("Fetched %s status=%s rows=%s", dataset_id, status, len(frame))
-        if frame.empty:
-            break
-        frames.append(frame)
-        if len(frame) < page_size:
-            break
+    # Monthly-sized chunks avoid OpenDataSoft's deep-offset safeguards while the
+    # overall page cap still bounds the complete extraction.
+    while chunk_start <= end_date:
+        chunk_end = min(end_date, chunk_start + timedelta(days=CHUNK_DAYS - 1))
+        where = _window_where(chunk_start, chunk_end)
+        page = 0
+        while True:
+            if pages_used >= max_pages:
+                raise RuntimeError(
+                    f"max_pages={max_pages} reached before completing {dataset_id}; "
+                    "increase the explicit bound and rerun"
+                )
+            offset = page * page_size
+            params = {"limit": page_size, "offset": offset, "where": where, "order_by": "datahora"}
+            if page == 0 or (page + 1) % 10 == 0:
+                LOGGER.info(
+                    "Fetching %s chunk=%s..%s page=%s total_pages=%s",
+                    dataset_id, chunk_start, chunk_end, page + 1, pages_used + 1,
+                )
+            try:
+                status, frame = _fetch_page(session, dataset_id, params)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to fetch {dataset_id} chunk={chunk_start}..{chunk_end} page={page + 1}"
+                ) from exc
+            pages_used += 1
+            if frame.empty:
+                break
+            frames.append(frame)
+            if len(frame) < page_size:
+                break
+            page += 1
+        LOGGER.info("Completed %s chunk=%s..%s status=%s", dataset_id, chunk_start, chunk_end, status)
+        chunk_start = chunk_end + timedelta(days=1)
 
     if not frames:
         return pd.DataFrame()
     result = pd.concat(frames, ignore_index=True).drop_duplicates().reset_index(drop=True)
+    if "datahora" in result.columns:
+        timestamps = pd.to_datetime(result["datahora"], errors="coerce", utc=True)
+        LOGGER.info(
+            "%s actual coverage=%s..%s rows=%s pages=%s",
+            dataset_id, timestamps.min(), timestamps.max(), len(result), pages_used,
+        )
     output_path = WINDOW_DIR / f"e_redes_{dataset_key}_window.parquet"
     try:
         save_dataframe(result, output_path)
@@ -110,15 +136,20 @@ def extract_window(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--start-date", default="2025-01-01")
-    parser.add_argument("--end-date", default="2025-03-31")
+    parser.add_argument("--start-date", default="2024-01-01")
+    parser.add_argument("--end-date", default="2025-12-31")
     parser.add_argument(
         "--datasets",
         default="consumption,injection,production",
         help="Comma-separated E-REDES dataset keys or dataset ids.",
     )
     parser.add_argument("--page-size", type=int, default=100)
-    parser.add_argument("--max-pages", type=int, default=100)
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=1000,
+        help="Maximum pages per dataset across all date chunks.",
+    )
     return parser
 
 
@@ -129,6 +160,12 @@ def main() -> None:
     args = parser.parse_args()
     start_date = _parse_date(args.start_date)
     end_date = _parse_date(args.end_date)
+    if start_date > end_date:
+        parser.error("--start-date must be on or before --end-date")
+    if not 1 <= args.page_size <= MAX_API_PAGE_SIZE:
+        parser.error(f"--page-size must be between 1 and {MAX_API_PAGE_SIZE}")
+    if args.max_pages < 1:
+        parser.error("--max-pages must be positive")
     dataset_values = [item.strip() for item in args.datasets.split(",") if item.strip()]
 
     for value in dataset_values:

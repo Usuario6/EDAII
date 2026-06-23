@@ -36,6 +36,9 @@ def _inspect_file(path: Path) -> None:
     print(f"columns={df.columns.tolist()}")
     if "datetime" in df.columns:
         print(f"datetime_nulls={int(df['datetime'].isna().sum())}")
+        timestamps = pd.to_datetime(df["datetime"], errors="coerce", utc=True)
+        print(f"datetime_min={timestamps.min()} datetime_max={timestamps.max()}")
+        print(f"duplicate_timestamps={int(timestamps.duplicated().sum())}")
     print(f"duplicate_rows={int(df.duplicated().sum())}")
     print(f"missing_values={df.isna().sum().to_dict()}")
     print(f"numeric_summary={_describe_numeric(df)}")
@@ -53,6 +56,8 @@ def main() -> None:
         SILVER_DATA_DIR / "ipma_daily_forecast.parquet",
         GOLD_DATA_DIR / "gold_consumption.parquet",
         GOLD_DATA_DIR / "gold_injection.parquet",
+        GOLD_DATA_DIR / "gold_consumption_hourly.parquet",
+        GOLD_DATA_DIR / "gold_injection_hourly.parquet",
         GOLD_DATA_DIR / "gold_weather_hourly.parquet",
     ]:
         _inspect_file(path)

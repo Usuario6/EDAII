@@ -7,6 +7,7 @@ Current status:
 - Live API validation works in the current environment.
 - Bounded E-REDES historical extraction, cleaning, silver generation, gold generation, and EDA reporting are implemented.
 - Chronological hourly baselines and the EDL II course analysis methods are implemented.
+- Rolling-origin backtesting and lag-dominance robustness checks are implemented.
 - No final model or dashboard is implemented yet.
 
 ## Data sources
@@ -33,20 +34,23 @@ Validated on 2026-06-23.
 
 Bounded E-REDES historical extraction window:
 
-- `2025-01-01` to `2025-03-31`
+- Requested and observed coverage: `2024-01-01` to `2025-12-31`
 - Saved to `data/raw/e_redes/e_redes_consumption_window.parquet`
 - Saved to `data/raw/e_redes/e_redes_grid_injection_window.parquet`
 - Saved to `data/raw/e_redes/e_redes_production_window.parquet`
 
 Current row counts:
 
-- `silver/e_redes_consumption.parquet`: 8644
-- `silver/e_redes_injection.parquet`: 8644
-- `silver/e_redes_production.parquet`: 8644
-- `gold/gold_consumption.parquet`: 8644
-- `gold/gold_injection.parquet`: 8644
-- `gold/gold_consumption_hourly.parquet`: 2160
-- `gold/gold_injection_hourly.parquet`: 2160
+- `raw/e_redes/e_redes_consumption_window.parquet`: 70,088
+- `raw/e_redes/e_redes_grid_injection_window.parquet`: 70,184
+- `raw/e_redes/e_redes_production_window.parquet`: 70,184
+- `silver/e_redes_consumption.parquet`: 70,088
+- `silver/e_redes_injection.parquet`: 70,184
+- `silver/e_redes_production.parquet`: 70,184
+- `gold/gold_consumption.parquet`: 70,088
+- `gold/gold_injection.parquet`: 70,184
+- `gold/gold_consumption_hourly.parquet`: 17,544
+- `gold/gold_injection_hourly.parquet`: 17,544
 - `gold/gold_weather_hourly.parquet`: 5328
 
 ## First execution
@@ -58,7 +62,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m scripts.validate_apis
-python -m scripts.extract_e_redes_window --start-date 2025-01-01 --end-date 2025-03-31 --page-size 100 --max-pages 100
+python -m scripts.extract_e_redes_window --start-date 2024-01-01 --end-date 2025-12-31 --page-size 100 --max-pages 1000
 python -m scripts.build_silver
 python -m scripts.build_gold
 python -m scripts.build_gold_hourly
@@ -66,6 +70,10 @@ python -m scripts.validate_pipeline
 python -m scripts.eda_report
 python -m scripts.run_class_methods_analysis
 python -m scripts.validate_class_methods
+python -m scripts.backtest_consumption
+python -m scripts.backtest_injection
+python -m scripts.robustness_checks
+python -m scripts.validate_backtesting
 ```
 
 The validation prints each HTTP status, shape, column list, and first rows, then writes CSV and Parquet samples under `data/raw/e_redes/` and `data/raw/ipma/`.
@@ -98,7 +106,8 @@ Validated on 2026-06-21. Fields are reproduced exactly as returned by each API, 
 - IPMA observations are a short, recent window and may not support stable long-horizon joins yet.
 - Operational risk must be treated as a proxy score, not a real failure prediction.
 - E-REDES lag features are sparse at the start of the historical window, which is expected.
-- IPMA observations are from 2026 while the bounded E-REDES window is from 2025, so weather is not joined to the current modelling tables.
+- IPMA observations are from 2026 while the bounded E-REDES window covers 2024–2025, so weather is not joined to the current modelling tables.
+- The complete hourly index contains 25 missing consumption targets and 2 missing injection targets. These hours are retained so lag 24 remains an exact 24-hour lag, then excluded from model fitting.
 
 ## Course methods implemented
 
@@ -124,8 +133,36 @@ python -m scripts.validate_class_methods
 
 Outputs are stored under `reports/models/`, `reports/outliers/`, `reports/dimensionality/`, and `reports/clustering/`. Runtime datasets remain excluded from Git.
 
+## Rolling-origin backtesting
+
+Backtesting uses an expanding chronological training window. The initial window is 60% of usable observations, followed by non-overlapping seven-day test windows advancing seven days at a time. Both targets produced 41 folds. No random train/test split is used.
+
+Average results across folds:
+
+- Consumption candidate: Random Forest, MAE `21,507.19`, RMSE `32,405.79`, MAPE `5.26%`, R2 `0.973`.
+- Injection candidate: LASSO, MAE `56,252.94`, RMSE `75,944.84`, MAPE `6.87%`, R2 `0.954`.
+- Random Forest won 39 of 41 consumption folds. Injection was less decisive: LASSO and Random Forest won 13 folds each, Ridge 10, and Gradient Boosting 5 folds.
+
+Removing lag 1 increased consumption MAE by approximately 35% to 133%, depending on model. Injection MAE increased by approximately 363% to 375%. The candidates are therefore strong short-horizon models but remain highly dependent on the latest observation. Seasonal lag-168 was stronger than lag-24 for consumption in the robustness holdout; both seasonal baselines were weak for injection.
+
+Detailed fold metrics, temporal error tables, plots, and the recommendation report are stored under `reports/backtesting/`.
+
+Reproduce the extended pipeline and evaluation:
+
+```bash
+python -m scripts.extract_e_redes_window --start-date 2024-01-01 --end-date 2025-12-31 --page-size 100 --max-pages 1000
+python -m scripts.build_silver
+python -m scripts.build_gold
+python -m scripts.build_gold_hourly
+python -m scripts.validate_pipeline
+python -m scripts.backtest_consumption
+python -m scripts.backtest_injection
+python -m scripts.robustness_checks
+python -m scripts.validate_backtesting
+```
+
 ## Next steps
 
-- Extend the bounded historical window and evaluate stability with rolling-origin backtesting.
 - Acquire historically aligned IPMA observations before adding weather features.
-- Select a candidate model only after comparing performance across multiple temporal folds.
+- Add holiday and calendar-event features, then rerun the same rolling-origin folds.
+- Evaluate direct multi-step forecasts where lag 1 is not available at prediction time.

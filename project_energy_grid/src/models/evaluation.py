@@ -16,7 +16,10 @@ def evaluate_regression(y_true, y_pred) -> dict[str, float]:
     actual, predicted = actual[valid], predicted[valid]
     if actual.size == 0:
         return {name: np.nan for name in ("mae", "rmse", "mape", "r2")}
-    nonzero = np.abs(actual) > np.finfo(float).eps
+    # Ignore values that are effectively zero relative to the target scale.
+    scale = np.nanmedian(np.abs(actual)) if actual.size else 0.0
+    near_zero = max(np.finfo(float).eps, scale * 1e-8)
+    nonzero = np.abs(actual) > near_zero
     mape = np.mean(np.abs((actual[nonzero] - predicted[nonzero]) / actual[nonzero])) * 100 if nonzero.any() else np.nan
     return {
         "mae": float(mean_absolute_error(actual, predicted)),
