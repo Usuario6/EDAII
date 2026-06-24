@@ -30,6 +30,9 @@ EXPECTED = [
     REPORTS_DIR / "clustering/clustering_summary.csv",
     REPORTS_DIR / "clustering/consumption_clusters_plot.png",
     REPORTS_DIR / "clustering/injection_clusters_plot.png",
+    REPORTS_DIR / "clustering/kmeans_k_diagnostics.csv",
+    REPORTS_DIR / "clustering/consumption_k_diagnostics.png",
+    REPORTS_DIR / "clustering/injection_k_diagnostics.png",
 ]
 
 
@@ -69,6 +72,17 @@ def main() -> None:
     }.intersection(INJECTION_FEATURES)
     if injection_leakage:
         failures.append(f"injection target/component leakage found: {sorted(injection_leakage)}")
+
+    diagnostics_path = REPORTS_DIR / "clustering/kmeans_k_diagnostics.csv"
+    if diagnostics_path.exists():
+        diagnostics = pd.read_csv(diagnostics_path)
+        required = {"dataset", "k", "silhouette", "inertia", "calinski_harabasz", "davies_bouldin"}
+        if not required.issubset(diagnostics.columns):
+            failures.append("K-means diagnostics have incomplete columns")
+        elif set(diagnostics["dataset"]) != {"consumption", "injection"}:
+            failures.append("K-means diagnostics are missing a dataset")
+        elif any(set(group["k"]) != set(range(2, 9)) for _, group in diagnostics.groupby("dataset")):
+            failures.append("K-means diagnostics do not cover k=2..8")
 
     if failures:
         raise RuntimeError("Validation failed:\n- " + "\n- ".join(failures))

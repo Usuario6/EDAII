@@ -15,7 +15,14 @@ from scripts.train_baseline_consumption import main as train_consumption
 from scripts.train_baseline_injection import FEATURES as INJECTION_FEATURES
 from scripts.train_baseline_injection import main as train_injection
 from src.config import GOLD_DATA_DIR, REPORTS_DIR, configure_logging
-from src.models.clustering import evaluate_clustering_silhouette, run_dbscan, run_kmeans, save_cluster_projection_plot
+from src.models.clustering import (
+    evaluate_clustering_silhouette,
+    evaluate_kmeans_k_range,
+    run_dbscan,
+    run_kmeans,
+    save_cluster_projection_plot,
+    save_kmeans_diagnostic_plot,
+)
 from src.models.dimensionality import run_pca, save_pca_outputs
 from src.models.feature_selection import correlation_feature_filter, random_forest_feature_importance
 from src.models.outliers import detect_iqr_outliers, detect_isolation_forest_outliers, detect_zscore_outliers
@@ -65,7 +72,7 @@ def _pca(name: str, df: pd.DataFrame, features: list[str]) -> pd.DataFrame:
     return variance
 
 
-def _cluster(name: str, df: pd.DataFrame, target: str, features: list[str]) -> list[dict]:
+def _cluster(name: str, df: pd.DataFrame, target: str, features: list[str]) -> tuple[list[dict], pd.DataFrame]:
     clustering_features = [column for column in ["hour", "dayofweek", "month", target, *features[-2:]] if column in df.columns]
     kmeans = run_kmeans(df, clustering_features, n_clusters=3)
     dbscan = run_dbscan(df, clustering_features, eps=0.8, min_samples=8)
@@ -82,11 +89,19 @@ def _cluster(name: str, df: pd.DataFrame, target: str, features: list[str]) -> l
         output / f"{name}_clusters_plot.png",
         f"K-means hourly clusters: {name}",
     )
+    diagnostics = evaluate_kmeans_k_range(kmeans["X"])
+    diagnostics.insert(0, "dataset", name)
+    save_kmeans_diagnostic_plot(
+        diagnostics,
+        output / f"{name}_k_diagnostics.png",
+        f"K-means cluster-number diagnostics: {name}",
+    )
     dbscan_clusters = len(set(dbscan["labels"]) - {-1})
-    return [
+    rows = [
         {"dataset": name, "method": "kmeans", "clusters": len(set(kmeans["labels"])), "noise_points": 0, "silhouette": evaluate_clustering_silhouette(kmeans["X"], kmeans["labels"]), "features": ",".join(clustering_features)},
         {"dataset": name, "method": "dbscan", "clusters": dbscan_clusters, "noise_points": int((dbscan["labels"] == -1).sum()), "silhouette": evaluate_clustering_silhouette(dbscan["X"], dbscan["labels"]), "features": ",".join(clustering_features)},
     ]
+    return rows, diagnostics
 
 
 def main() -> None:
@@ -95,17 +110,20 @@ def main() -> None:
     if missing:
         raise FileNotFoundError(f"Build hourly gold datasets first: {missing}")
 
-    outlier_rows, pca_rows, cluster_rows = [], [], []
+    outlier_rows, pca_rows, cluster_rows, diagnostic_rows = [], [], [], []
     for name, spec in DATASETS.items():
         df = pd.read_parquet(spec["path"])
         _feature_selection(name, df, spec["target"], spec["features"])
         outlier_rows.append(_outliers(name, df, spec["target"], spec["features"]))
         pca_rows.append(_pca(name, df, spec["features"]))
-        cluster_rows.extend(_cluster(name, df, spec["target"], spec["features"]))
+        clusters, diagnostics = _cluster(name, df, spec["target"], spec["features"])
+        cluster_rows.extend(clusters)
+        diagnostic_rows.append(diagnostics)
 
     pd.DataFrame(outlier_rows).to_csv(REPORTS_DIR / "outliers/outlier_summary.csv", index=False)
     pd.concat(pca_rows, ignore_index=True).to_csv(REPORTS_DIR / "dimensionality/pca_explained_variance.csv", index=False)
     pd.DataFrame(cluster_rows).to_csv(REPORTS_DIR / "clustering/clustering_summary.csv", index=False)
+    pd.concat(diagnostic_rows, ignore_index=True).to_csv(REPORTS_DIR / "clustering/kmeans_k_diagnostics.csv", index=False)
     train_consumption()
     train_injection()
     LOGGER.info("Course-method analysis completed")
