@@ -117,9 +117,11 @@ def refresh_shared_reports(output_dir: Path) -> None:
         coverage = pd.read_csv(coverage_path)
         usable = bool(coverage["usable_for_historical_modelling"].astype(str).str.lower().eq("true").any())
         overlap = int(coverage["overlap_hours"].max())
+        source = str(coverage.get("weather_source", pd.Series(["historical weather"])).iloc[0])
+        source_label = "Open-Meteo reanalysis" if source == "open_meteo_reanalysis" else source
         weather_text = (
             "# Weather coverage impact\n\n"
-            f"The aggregated IPMA table contains {int(coverage['weather_hourly_rows'].max())} hourly timestamps, "
+            f"The aligned {source_label} table contains {int(coverage['weather_hourly_rows'].max())} hourly timestamps, "
             f"with {overlap} overlapping E-REDES hours. Historical weather enrichment was "
             f"{'enabled' if usable else 'not enabled'} for modelling. No long-range filling or timestamp extrapolation was applied.\n"
         )
@@ -164,7 +166,8 @@ def _write_report(results: pd.DataFrame, dependency: pd.DataFrame, output_path: 
             "## Weather and recommendation", "",
             f"Historically aligned weather features were {'usable' if weather_usable else 'not usable'} for this experiment. No weather values were force-filled across the 2024–2025 interval.",
             "Use the strongest with-lag model for next-hour nowcasting. For operational horizons where lag 1 is unavailable, select from the without-lag or calendar/seasonal scenarios and treat the performance loss as the realistic forecast cost.",
-            "Limitations: one chronological holdout, a bounded two-year energy window, no historically overlapping weather, and no holiday-locality features beyond national Portuguese holidays.", "",
+            "Injection forecasts are credible primarily at short horizons. The 24-hour result has weak explanatory power, and the 168-hour result is weak and exploratory; neither should be presented as established operational performance.",
+            "Limitations: one chronological holdout, a bounded two-year energy window, origin-time rather than target-time weather, and no holiday-locality features beyond national Portuguese holidays.", "",
         ]
     )
     output_path.write_text("\n".join(lines), encoding="utf-8")

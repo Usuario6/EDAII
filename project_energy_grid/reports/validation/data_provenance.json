@@ -1,0 +1,160 @@
+{
+  "generated_at_utc": "2026-06-24T12:20:27.311413+00:00",
+  "extraction_timestamp_note": "The original extraction command did not persist an API response timestamp. snapshot_file_mtime_utc is the best available local extraction/snapshot timestamp.",
+  "reproducibility_warning": "Live APIs are mutable. Rebuilding later may change rows and metrics; exact reproduction requires files matching the recorded SHA-256 hashes.",
+  "sources": {
+    "E-REDES": {
+      "api": "https://e-redes.opendatasoft.com/api/explore/v2.1/catalog/datasets",
+      "datasets": [
+        "consumo-total-nacional",
+        "energia-injetada-na-rede-de-distribuicao",
+        "energia-produzida-total-nacional"
+      ],
+      "role": "2024-2025 electricity targets and components"
+    },
+    "IPMA": {
+      "api": "https://api.ipma.pt/open-data",
+      "datasets": [
+        "recent station observations",
+        "warnings",
+        "daily forecasts"
+      ],
+      "role": "current/recent operational meteorological context; not historical model enrichment"
+    },
+    "Open-Meteo": {
+      "api": "https://archive-api.open-meteo.com/v1/archive",
+      "datasets": [
+        "historical hourly reanalysis for seven Portuguese locations"
+      ],
+      "role": "2024-2025 historical weather training and enrichment"
+    }
+  },
+  "datasets": {
+    "raw_e_redes_consumption": {
+      "path": "data/raw/e_redes/e_redes_consumption_window.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:43:06.745115+00:00",
+      "rows": 70088,
+      "columns": 11,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:45:00+00:00",
+      "sha256": "2206e30843b8147aceb9805cad8de6878adfcf7ad367e9cbfa911603dd500edf"
+    },
+    "raw_e_redes_injection": {
+      "path": "data/raw/e_redes/e_redes_grid_injection_window.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:46:19.918011+00:00",
+      "rows": 70184,
+      "columns": 12,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:45:00+00:00",
+      "sha256": "cbafcea6676b7e8fdfd1579ea37e3402aa21f8f0b102c3ed061a87e44d2b0ec1"
+    },
+    "raw_e_redes_production": {
+      "path": "data/raw/e_redes/e_redes_production_window.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:49:35.638901+00:00",
+      "rows": 70184,
+      "columns": 9,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:45:00+00:00",
+      "sha256": "010cb3f68cfe207d047e3b46d7a72b4e6ae739d819e78ef961c4e0f8206915d2"
+    },
+    "raw_open_meteo_hourly": {
+      "path": "data/raw/open_meteo/open_meteo_historical_hourly.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T21:58:10.347003+00:00",
+      "rows": 122808,
+      "columns": 14,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:00:00+00:00",
+      "sha256": "574b7c6fce516f8731b98f55e3bb01d55173516eb3d6faad5fb3d4dced2a68c2"
+    },
+    "silver_consumption": {
+      "path": "data/silver/e_redes_consumption.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:49:43.985896+00:00",
+      "rows": 70088,
+      "columns": 12,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:45:00+00:00",
+      "sha256": "43911d02ccf2e6c06030f9c7107bef71873befa4becfbca657d25e80126c078f"
+    },
+    "silver_injection": {
+      "path": "data/silver/e_redes_injection.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:49:44.947895+00:00",
+      "rows": 70184,
+      "columns": 13,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:45:00+00:00",
+      "sha256": "9b01fc7df94d045ea55aadf0fff1283067abdce27ed8c61e8e44a8d205dec37c"
+    },
+    "silver_production": {
+      "path": "data/silver/e_redes_production.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:49:45.743894+00:00",
+      "rows": 70184,
+      "columns": 10,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:45:00+00:00",
+      "sha256": "2ea62cac04f9a6a75d5d7fd60d553e8081f9fa665c676e2c0dd2fcc34de161ce"
+    },
+    "gold_15min_consumption": {
+      "path": "data/gold/gold_consumption.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:49:47.073893+00:00",
+      "rows": 70088,
+      "columns": 15,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:45:00+00:00",
+      "sha256": "ca7683d09d3147424e9f6948d5e34621cb2e63fc4e6e1a3dc43b0399ade91958"
+    },
+    "gold_15min_injection": {
+      "path": "data/gold/gold_injection.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:49:47.434893+00:00",
+      "rows": 70184,
+      "columns": 17,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:45:00+00:00",
+      "sha256": "b37de116de1a6177502abc22ce0595ddbe8a77fd813fa44aeec7c4ddda0afe13"
+    },
+    "gold_hourly_consumption": {
+      "path": "data/gold/gold_consumption_hourly.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:50:10.159878+00:00",
+      "rows": 17544,
+      "columns": 15,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:00:00+00:00",
+      "sha256": "65a576e6afb0542a169b6d31b3de0f013d3ff825ab1a6dc2f33d1864246f48e3"
+    },
+    "gold_hourly_injection": {
+      "path": "data/gold/gold_injection_hourly.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T18:50:10.486877+00:00",
+      "rows": 17544,
+      "columns": 17,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:00:00+00:00",
+      "sha256": "8cc0824b4104e271412a7bd0876e8da8ad6679392db3ad5aa21480f546039fc2"
+    },
+    "gold_weather_features_hourly": {
+      "path": "data/gold/gold_weather_features_hourly.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T22:11:45.153599+00:00",
+      "rows": 17544,
+      "columns": 17,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:00:00+00:00",
+      "sha256": "02c48c6a940d5f5bce33400192029cfb3af97abe909eb3c3388b50e873b6fac6"
+    },
+    "gold_enriched_consumption": {
+      "path": "data/gold/gold_consumption_enriched.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T22:11:46.095599+00:00",
+      "rows": 17544,
+      "columns": 43,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:00:00+00:00",
+      "sha256": "38578a15976e87e92cbf809b2f93615858a8fc6a23fa2a1d8da600ff1d3a6a94"
+    },
+    "gold_enriched_injection": {
+      "path": "data/gold/gold_injection_enriched.parquet",
+      "snapshot_file_mtime_utc": "2026-06-23T22:11:46.212599+00:00",
+      "rows": 17544,
+      "columns": 45,
+      "date_min_utc": "2024-01-01T00:00:00+00:00",
+      "date_max_utc": "2025-12-31T23:00:00+00:00",
+      "sha256": "5ff3b9aaed597810169de59b50300c9e9ff8e8846b9f1f4e796cc20bd60111c1"
+    }
+  }
+}

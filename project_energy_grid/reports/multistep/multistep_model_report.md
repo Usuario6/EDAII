@@ -58,4 +58,5 @@ horizon
 
 Historically aligned weather features were usable for this experiment. No weather values were force-filled across the 2024–2025 interval.
 Use the strongest with-lag model for next-hour nowcasting. For operational horizons where lag 1 is unavailable, select from the without-lag or calendar/seasonal scenarios and treat the performance loss as the realistic forecast cost.
-Limitations: one chronological holdout, a bounded two-year energy window, no historically overlapping weather, and no holiday-locality features beyond national Portuguese holidays.
+Injection forecasts are credible primarily at short horizons. The 24-hour result has weak explanatory power, and the 168-hour result is weak and exploratory; neither should be presented as established operational performance.
+Limitations: one chronological holdout, a bounded two-year energy window, origin-time rather than target-time weather, and no holiday-locality features beyond national Portuguese holidays.

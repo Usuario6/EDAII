@@ -51,4 +51,4 @@ The risk score should be interpreted as an explainable operational pressure indi
 
 High values identify timestamps where the system behaviour is unusual, elevated, or unstable relative to recent and historical patterns.
 
-Weather contribution is currently limited because IPMA observations do not overlap with the 2024–2025 E-REDES modelling period.
+Weather contribution uses aligned Open-Meteo reanalysis for 2024–2025. IPMA observations remain current/recent operational context and are not force-filled into the historical modelling period.

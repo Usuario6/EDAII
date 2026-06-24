@@ -196,13 +196,22 @@ cloud_cover, location, latitude, longitude, datetime
 
 ## Setup
 
+Supported Python: **3.11 or newer**. The final audit was executed with Python
+3.14.5. For the closest dependency reproduction, install the pinned direct
+dependencies from `requirements-lock.txt`; `requirements.txt` remains the
+unpinned convenience specification.
+
 From the project root:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-lock.txt
 ```
+
+Live APIs are mutable. Rebuilding at a later date can produce different rows
+and metrics. Exact snapshot reproduction requires data files matching the
+SHA-256 hashes in `reports/validation/data_provenance.json`.
 
 ## Full pipeline execution
 
@@ -220,6 +229,7 @@ python -m scripts.extract_e_redes_window \
 python -m scripts.build_silver
 python -m scripts.build_gold
 python -m scripts.build_gold_hourly
+python -m scripts.build_audit_metadata
 python -m scripts.validate_pipeline
 
 python -m scripts.eda_report
@@ -382,6 +392,9 @@ Interpretation:
 - Lag features remain the strongest predictors.
 - Consumption is more stable and easier to forecast than injection.
 - Injection degrades strongly at longer horizons because it is more volatile and depends on external production conditions.
+- Injection results are credible primarily at short horizons. The 24h result
+  has weak explanatory power, and the 168h result is weak and exploratory; do
+  not present either as established operational performance.
 
 Outputs:
 
@@ -651,6 +664,35 @@ src/
 
 Runtime datasets under `data/` are excluded from Git.
 
+## Data provenance and timestamp quality
+
+Run the auditable metadata generator after rebuilding the data:
+
+```bash
+python -m scripts.build_audit_metadata
+```
+
+Generated audit artifacts:
+
+```text
+reports/validation/timestamp_quality_report.csv
+reports/validation/timestamp_quality_report.md
+reports/validation/data_provenance.json
+```
+
+The provenance manifest records source APIs, available snapshot timestamps,
+row counts, date ranges and SHA-256 hashes. The original extraction scripts did
+not persist API response timestamps, so raw-file modification times are clearly
+identified as the best available snapshot timestamp rather than an exact server
+extraction timestamp.
+
+The duplicated 15-minute timestamps coincide with Portuguese DST transitions
+and already exist in the E-REDES source snapshot with different values. They
+are retained for traceability rather than silently dropped or assigned invented
+offsets. The hourly layer averages all published records in each hour. Missing
+hours remain missing in the complete hourly index and are excluded from model
+fitting. See the timestamp report for counts, dates and the remaining bias risk.
+
 ## Known limitations
 
 - The operational-risk score is a proxy, not a real grid-failure probability.
@@ -661,6 +703,11 @@ Runtime datasets under `data/` are excluded from Git.
 - Injection is harder to forecast at longer horizons because it depends strongly on generation conditions.
 - Raw and 15-minute E-REDES layers contain 16 duplicated timestamps, but the hourly modelling layers have zero duplicated timestamps.
 - The complete hourly index keeps 25 missing consumption targets and 2 missing injection targets to preserve exact hourly chronology.
+- The DST-correlated duplicate records are retained. Equal-weight hourly
+  aggregation may bias the four affected hours, and the separate October 2025
+  consumption gap remains unresolved in the source snapshot.
+- Live API rebuilds are not byte-for-byte reproducible without the snapshot
+  files matching `reports/validation/data_provenance.json`.
 
 ## Final project conclusion
 

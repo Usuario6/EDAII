@@ -90,7 +90,7 @@ def _write_model_selection_report() -> None:
             "## Interpretation and limitations", "",
             "Lag-1 dominance is reported explicitly: strong degradation without it indicates that short-term persistence drives much of the score.",
             "The evaluation uses an expanding training window and non-overlapping chronological test windows; no random split is used.",
-            "The current weather observations do not overlap the E-REDES history, so weather is not included.",
+            "This rolling-origin baseline excludes weather by design. IPMA provides current/recent operational context; separate Open-Meteo reanalysis is aligned to 2024-2025 for weather-enriched experiments.",
             "Results cover a bounded historical interval and do not prove performance during unseen structural changes.", "",
         ]
     )

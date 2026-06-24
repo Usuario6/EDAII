@@ -95,7 +95,7 @@ def _write_report(summary: pd.DataFrame, output_path: Path) -> None:
         "",
         "High values identify timestamps where the system behaviour is unusual, elevated, or unstable relative to recent and historical patterns.",
         "",
-        "Weather contribution is currently limited because IPMA observations do not overlap with the 2024–2025 E-REDES modelling period.",
+        "Weather contribution uses aligned Open-Meteo reanalysis for 2024–2025. IPMA observations remain current/recent operational context and are not force-filled into the historical modelling period.",
         "",
     ]
     output_path.write_text("\n".join(lines), encoding="utf-8")
