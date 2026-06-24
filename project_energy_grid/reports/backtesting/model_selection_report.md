@@ -1,6 +1,8 @@
-# Rolling-origin model selection report
+# Rolling-Origin Backtesting Report
 
-## Consumption
+This report compares consumption and grid injection forecast models across expanding chronological folds. Metrics are reported in the target's E-REDES units unless shown as percentages.
+
+## Consumption Forecast Results
 
 - Coverage: 2024-01-01 00:00:00+00:00 to 2025-12-31 23:00:00+00:00
 - Hourly rows: 17,544
@@ -19,7 +21,7 @@ Average and standard deviation by model:
 seasonal_naive_lag_24 107975.908 34608.568 159490.239 58340.670     11.420    27.634    0.501   0.266     41
 ```
 
-## Injection
+## Grid Injection Forecast Results
 
 - Coverage: 2024-01-01 00:00:00+00:00 to 2025-12-31 23:00:00+00:00
 - Hourly rows: 17,544
@@ -38,9 +40,12 @@ Average and standard deviation by model:
 seasonal_naive_lag_24 389346.704 167299.478 493504.633 208970.071     49.325    21.195   -0.475   0.601     41
 ```
 
-## Interpretation and limitations
+## Interpretation of Results
 
 Lag-1 dominance is reported explicitly: strong degradation without it indicates that short-term persistence drives much of the score.
 The evaluation uses an expanding training window and non-overlapping chronological test windows; no random split is used.
-This rolling-origin baseline excludes weather by design. IPMA provides current/recent operational context; separate Open-Meteo reanalysis is aligned to 2024-2025 for weather-enriched experiments.
+This rolling-origin baseline excludes weather by design. IPMA provides operational/recent weather context; separate historical Open-Meteo reanalysis is aligned to 2024-2025 for weather-enriched experiments.
+
+## Known Limitations
+
 Results cover a bounded historical interval and do not prove performance during unseen structural changes.

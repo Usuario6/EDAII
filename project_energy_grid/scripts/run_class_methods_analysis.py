@@ -8,16 +8,14 @@ from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
-import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.decomposition import PCA
 
 from scripts.train_baseline_consumption import FEATURES as CONSUMPTION_FEATURES
 from scripts.train_baseline_consumption import main as train_consumption
 from scripts.train_baseline_injection import FEATURES as INJECTION_FEATURES
 from scripts.train_baseline_injection import main as train_injection
 from src.config import GOLD_DATA_DIR, REPORTS_DIR, configure_logging
-from src.models.clustering import evaluate_clustering_silhouette, run_dbscan, run_kmeans
+from src.models.clustering import evaluate_clustering_silhouette, run_dbscan, run_kmeans, save_cluster_projection_plot
 from src.models.dimensionality import run_pca, save_pca_outputs
 from src.models.feature_selection import correlation_feature_filter, random_forest_feature_importance
 from src.models.outliers import detect_iqr_outliers, detect_isolation_forest_outliers, detect_zscore_outliers
@@ -78,14 +76,12 @@ def _cluster(name: str, df: pd.DataFrame, target: str, features: list[str]) -> l
     rows["dbscan_cluster"] = dbscan["labels"]
     rows.to_csv(output / f"{name}_clusters.csv", index=False)
 
-    coordinates = PCA(n_components=2, random_state=42).fit_transform(kmeans["X"])
-    fig, ax = plt.subplots(figsize=(8, 6))
-    scatter = ax.scatter(coordinates[:, 0], coordinates[:, 1], c=kmeans["labels"], cmap="tab10", s=11, alpha=0.55)
-    ax.set(xlabel="Profile PC1", ylabel="Profile PC2", title=f"K-means hourly clusters: {name}")
-    fig.colorbar(scatter, ax=ax, label="Cluster")
-    fig.tight_layout()
-    fig.savefig(output / f"{name}_clusters_plot.png", dpi=150)
-    plt.close(fig)
+    save_cluster_projection_plot(
+        kmeans["X"],
+        kmeans["labels"],
+        output / f"{name}_clusters_plot.png",
+        f"K-means hourly clusters: {name}",
+    )
     dbscan_clusters = len(set(dbscan["labels"]) - {-1})
     return [
         {"dataset": name, "method": "kmeans", "clusters": len(set(kmeans["labels"])), "noise_points": 0, "silhouette": evaluate_clustering_silhouette(kmeans["X"], kmeans["labels"]), "features": ",".join(clustering_features)},

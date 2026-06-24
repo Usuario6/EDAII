@@ -17,6 +17,7 @@ from sklearn.pipeline import Pipeline
 from src.models.backtesting import rolling_origin_splits, run_backtest, summarize_backtest_results
 from src.models.evaluation import evaluate_regression
 from src.models.regularized import train_lasso_model, train_ridge_model
+from src.utils.visualization import CONSUMPTION_HOURLY_SOURCE, INJECTION_HOURLY_SOURCE, save_figure_with_source
 
 LOGGER = logging.getLogger(__name__)
 
@@ -132,6 +133,6 @@ def _plot_metrics(results: pd.DataFrame, output_path: Path, title: str) -> None:
     axes[1].set(ylabel="RMSE", xlabel="Rolling-origin fold")
     axes[0].set_title(f"Rolling-origin metrics: {title}")
     axes[0].legend(ncol=3, fontsize=8)
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    source_text = CONSUMPTION_HOURLY_SOURCE if title == "consumption" else INJECTION_HOURLY_SOURCE
+    save_figure_with_source(fig, output_path, source_text)
     plt.close(fig)

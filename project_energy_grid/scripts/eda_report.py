@@ -11,6 +11,7 @@ import numpy as np
 
 from src.config import GOLD_DATA_DIR, REPORTS_DIR, SILVER_DATA_DIR, configure_logging, ensure_data_directories
 from src.utils.io import save_dataframe
+from src.utils.visualization import save_figure_with_source
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
@@ -18,6 +19,12 @@ import matplotlib.pyplot as plt
 
 LOGGER = logging.getLogger(__name__)
 EDA_DIR = REPORTS_DIR / "eda"
+EDA_SOURCES = {
+    "gold_consumption": "Source: E-REDES consumo-total-nacional, 15-minute gold dataset, 2024-2025.",
+    "gold_injection": "Source: E-REDES energia-injetada-na-rede-de-distribuicao, 15-minute gold dataset, 2024-2025.",
+    "gold_weather_hourly": "Source: IPMA operational/recent station observations, legacy weather gold dataset.",
+    "silver_production": "Source: E-REDES energia-produzida-total-nacional, silver dataset, 2024-2025.",
+}
 
 
 def _load_parquet(path: Path) -> pd.DataFrame | None:
@@ -31,13 +38,19 @@ def _save_table(df: pd.DataFrame, stem: str) -> None:
     save_dataframe(df, EDA_DIR / f"{stem}.csv")
 
 
-def _save_plot(fig: plt.Figure, stem: str) -> None:
-    fig.tight_layout()
-    fig.savefig(EDA_DIR / f"{stem}.png", dpi=150)
+def _save_plot(fig: plt.Figure, stem: str, source_text: str) -> None:
+    save_figure_with_source(fig, EDA_DIR / f"{stem}.png", source_text)
     plt.close(fig)
 
 
-def _time_series_plot(df: pd.DataFrame, datetime_col: str, value_col: str, title: str, stem: str) -> None:
+def _time_series_plot(
+    df: pd.DataFrame,
+    datetime_col: str,
+    value_col: str,
+    title: str,
+    stem: str,
+    source_text: str,
+) -> None:
     if df is None or datetime_col not in df.columns or value_col not in df.columns:
         return
     series = df[[datetime_col, value_col]].dropna().sort_values(datetime_col)
@@ -48,10 +61,17 @@ def _time_series_plot(df: pd.DataFrame, datetime_col: str, value_col: str, title
     ax.set_title(title)
     ax.set_xlabel(datetime_col)
     ax.set_ylabel(value_col)
-    _save_plot(fig, stem)
+    _save_plot(fig, stem, source_text)
 
 
-def _grouped_bar_plot(df: pd.DataFrame, group_col: str, value_col: str, title: str, stem: str) -> None:
+def _grouped_bar_plot(
+    df: pd.DataFrame,
+    group_col: str,
+    value_col: str,
+    title: str,
+    stem: str,
+    source_text: str,
+) -> None:
     if df is None or group_col not in df.columns or value_col not in df.columns:
         return
     grouped = df[[group_col, value_col]].dropna().groupby(group_col)[value_col].mean()
@@ -62,7 +82,19 @@ def _grouped_bar_plot(df: pd.DataFrame, group_col: str, value_col: str, title: s
     ax.set_title(title)
     ax.set_xlabel(group_col)
     ax.set_ylabel(f"Average {value_col}")
-    _save_plot(fig, stem)
+    _save_plot(fig, stem, source_text)
+
+
+def _correlation_plot(corr: pd.DataFrame, name: str) -> None:
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(corr.values, cmap="coolwarm", aspect="auto", vmin=-1, vmax=1)
+    ax.set_xticks(range(len(corr.columns)))
+    ax.set_xticklabels(corr.columns, rotation=90, fontsize=7)
+    ax.set_yticks(range(len(corr.index)))
+    ax.set_yticklabels(corr.index, fontsize=7)
+    ax.set_title(f"Correlation matrix - {name}")
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    _save_plot(fig, f"correlation_matrix_{name}", EDA_SOURCES[name])
 
 
 def _coverage_summary(name: str, df: pd.DataFrame) -> dict[str, object]:
@@ -196,31 +228,23 @@ def main() -> None:
         corr = numeric.corr(numeric_only=True)
         if not corr.empty:
             _save_table(corr, f"correlation_matrix_{name}")
-            fig, ax = plt.subplots(figsize=(10, 8))
-            im = ax.imshow(corr.values, cmap="coolwarm", aspect="auto", vmin=-1, vmax=1)
-            ax.set_xticks(range(len(corr.columns)))
-            ax.set_xticklabels(corr.columns, rotation=90, fontsize=7)
-            ax.set_yticks(range(len(corr.index)))
-            ax.set_yticklabels(corr.index, fontsize=7)
-            ax.set_title(f"Correlation matrix - {name}")
-            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-            _save_plot(fig, f"correlation_matrix_{name}")
+            _correlation_plot(corr, name)
 
     if "gold_consumption" in datasets:
         df = datasets["gold_consumption"]
-        _time_series_plot(df, "datetime", "total", "Consumption time series", "consumption_time_series")
-        _grouped_bar_plot(df, "hour", "total", "Hourly average consumption", "consumption_hourly_average")
-        _grouped_bar_plot(df, "dayofweek", "total", "Weekday average consumption", "consumption_weekday_average")
+        _time_series_plot(df, "datetime", "total", "Consumption time series", "consumption_time_series", EDA_SOURCES["gold_consumption"])
+        _grouped_bar_plot(df, "hour", "total", "Hourly average consumption", "consumption_hourly_average", EDA_SOURCES["gold_consumption"])
+        _grouped_bar_plot(df, "dayofweek", "total", "Weekday average consumption", "consumption_weekday_average", EDA_SOURCES["gold_consumption"])
 
     if "gold_injection" in datasets:
         df = datasets["gold_injection"]
-        _time_series_plot(df, "datetime", "total_injection", "Injection time series", "injection_time_series")
-        _grouped_bar_plot(df, "hour", "total_injection", "Hourly average injection", "injection_hourly_average")
-        _grouped_bar_plot(df, "dayofweek", "total_injection", "Weekday average injection", "injection_weekday_average")
+        _time_series_plot(df, "datetime", "total_injection", "Injection time series", "injection_time_series", EDA_SOURCES["gold_injection"])
+        _grouped_bar_plot(df, "hour", "total_injection", "Hourly average injection", "injection_hourly_average", EDA_SOURCES["gold_injection"])
+        _grouped_bar_plot(df, "dayofweek", "total_injection", "Weekday average injection", "injection_weekday_average", EDA_SOURCES["gold_injection"])
 
     if "silver_production" in datasets:
         df = datasets["silver_production"]
-        _time_series_plot(df, "datetime", "total", "Production time series", "production_time_series")
+        _time_series_plot(df, "datetime", "total", "Production time series", "production_time_series", EDA_SOURCES["silver_production"])
 
     outlier_frames = [_outlier_summary(name, df) for name, df in datasets.items()]
     outlier_frames = [frame for frame in outlier_frames if not frame.empty]

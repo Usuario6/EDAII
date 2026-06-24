@@ -107,9 +107,11 @@ def build_timestamp_report() -> pd.DataFrame:
     report.to_csv(TIMESTAMP_CSV, index=False)
 
     lines = [
-        "# Timestamp and DST quality report",
+        "# Timestamp and DST Validation Report",
         "",
-        "## Finding",
+        "This validation report documents duplicate and missing 15-minute timestamps without modifying the source snapshot.",
+        "",
+        "## Validation Findings",
         "",
         "All duplicated timestamps occur in the 01:00-01:45 UTC interval on Portugal's "
         "2024 and 2025 daylight-saving transition dates. The raw E-REDES snapshot already "
@@ -120,7 +122,7 @@ def build_timestamp_report() -> pd.DataFrame:
         "dates. Consumption has the same DST-related gaps plus a separate 96-quarter-hour "
         "gap spanning 2025-10-13/14; that additional gap is not a DST transition.",
         "",
-        "## Decision",
+        "## Data-Handling Decision",
         "",
         "No source record is silently dropped and no synthetic timezone offset is assigned. "
         "The existing hourly layer averages every record published for an hour. Hours with no "
@@ -128,7 +130,7 @@ def build_timestamp_report() -> pd.DataFrame:
         "excluded from model fitting. This conservative policy preserves traceability, but the "
         "four DST hours may be biased because repeated source records receive equal weight.",
         "",
-        "## Counts",
+        "## Validation Results",
         "",
         "```text",
         report[[
@@ -138,6 +140,10 @@ def build_timestamp_report() -> pd.DataFrame:
         "```",
         "",
         "Machine-readable details and the decision are in `timestamp_quality_report.csv`.",
+        "",
+        "## Known Limitations",
+        "",
+        "The source does not provide enough timezone metadata to reconstruct the ambiguous DST records safely. Equal-weight hourly aggregation may bias the affected hours.",
     ]
     TIMESTAMP_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return report

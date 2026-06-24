@@ -164,6 +164,7 @@ def build_risk_score(
     strong_wind = result.get("strong_wind_flag", pd.Series(False, index=result.index)).fillna(False).astype(bool)
     weather_score = (weather_available & (heavy_rain | strong_wind)).astype(float)
 
+    # Fixed weights create an interpretable index; they are not fitted probabilities.
     risk_score = 100 * (
         0.30 * pressure_score
         + 0.25 * seasonal_deviation_score

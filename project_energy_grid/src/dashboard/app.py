@@ -10,22 +10,35 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
+from src.utils.visualization import (
+    CONSUMPTION_HOURLY_SOURCE,
+    INJECTION_HOURLY_SOURCE,
+    RISK_SOURCE,
+    WEATHER_ENRICHED_SOURCE,
+    WEATHER_SOURCE,
+    add_plotly_source_footer,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 
 CONFIG = {
-    "Consumption": {
+    "Consumption forecast": {
         "target": "total",
-        "unit": "energy",
+        "target_label": "National electricity consumption",
+        "unit": "E-REDES reported units",
+        "source": CONSUMPTION_HOURLY_SOURCE,
         "gold_path": DATA_DIR / "gold/gold_consumption_enriched.parquet",
         "risk_path": REPORTS_DIR / "risk/consumption_risk_score.csv",
         "multistep_path": REPORTS_DIR / "multistep/consumption_multistep_summary.csv",
     },
-    "Injection": {
+    "Grid injection forecast": {
         "target": "total_injection",
-        "unit": "energy",
+        "target_label": "Grid injection",
+        "unit": "E-REDES reported units",
+        "source": INJECTION_HOURLY_SOURCE,
         "gold_path": DATA_DIR / "gold/gold_injection_enriched.parquet",
         "risk_path": REPORTS_DIR / "risk/injection_risk_score.csv",
         "multistep_path": REPORTS_DIR / "multistep/injection_multistep_summary.csv",
@@ -42,6 +55,17 @@ WEATHER_COLUMNS = [
     "hdd_18",
     "cdd_22",
 ]
+
+WEATHER_LABELS = {
+    "temperatura": "Temperature (deg C)",
+    "radiacao": "Solar radiation (W/m2)",
+    "intensidadeventokm": "Wind speed (km/h)",
+    "precacumulada": "Precipitation (mm)",
+    "humidade": "Relative humidity (%)",
+    "pressao": "Surface pressure (hPa)",
+    "hdd_18": "Heating degree difference (deg C)",
+    "cdd_22": "Cooling degree difference (deg C)",
+}
 
 RISK_COMPONENTS = [
     "pressure_score",
@@ -160,8 +184,16 @@ def aggregate_timeseries(df: pd.DataFrame, datetime_col: str, columns: list[str]
     )
 
 
-def show_kpis(data: pd.DataFrame, risk: pd.DataFrame, multistep: pd.DataFrame, target: str) -> None:
+def show_kpis(
+    data: pd.DataFrame,
+    risk: pd.DataFrame,
+    multistep: pd.DataFrame,
+    target: str,
+    target_label: str,
+    unit: str,
+) -> None:
     st.subheader("Executive overview")
+    st.caption(f"Selected analysis: {target_label}. Forecast errors use {unit.lower()}.")
 
     high_count = 0
     critical_count = 0
@@ -197,17 +229,29 @@ def show_kpis(data: pd.DataFrame, risk: pd.DataFrame, multistep: pd.DataFrame, t
     cols = st.columns(7)
     cols[0].metric("Rows", f"{len(data):,}")
     cols[1].metric("Missing target", f"{missing_target:,}")
-    cols[2].metric("Mean risk", format_number(mean_risk))
-    cols[3].metric("Max risk", format_number(max_risk))
+    cols[2].metric("Mean risk (0-100)", format_number(mean_risk))
+    cols[3].metric("Max risk (0-100)", format_number(max_risk))
     cols[4].metric("High risk hours", f"{high_count:,}")
     cols[5].metric("Critical hours", f"{critical_count:,}")
     cols[6].metric("Weather-flag hours", f"{weather_count:,}")
 
-    st.caption(f"Best observed RMSE: {format_number(best_rmse)} — {best_model}")
+    st.caption(f"Best observed RMSE ({unit}): {format_number(best_rmse)} | {best_model}")
 
 
-def plot_target_and_risk(data: pd.DataFrame, risk: pd.DataFrame, target: str, frequency: str) -> None:
-    st.subheader("Target and operational risk over time")
+def plot_target_and_risk(
+    data: pd.DataFrame,
+    risk: pd.DataFrame,
+    target: str,
+    target_label: str,
+    unit: str,
+    frequency: str,
+    source_text: str,
+) -> None:
+    st.subheader(f"{target_label} and operational risk proxy over time")
+    st.caption(
+        "The left axis shows the observed target. The right axis shows the 0-100 risk score; "
+        "high values indicate unusual conditions, not confirmed failures."
+    )
 
     if data.empty or target not in data.columns:
         st.warning("Target dataset is missing.")
@@ -221,7 +265,7 @@ def plot_target_and_risk(data: pd.DataFrame, risk: pd.DataFrame, target: str, fr
             x=target_data["datetime"],
             y=target_data[target],
             mode="lines",
-            name=target,
+            name=target_label,
         ),
         secondary_y=False,
     )
@@ -233,7 +277,7 @@ def plot_target_and_risk(data: pd.DataFrame, risk: pd.DataFrame, target: str, fr
                 x=risk_data["datetime"],
                 y=risk_data["risk_score"],
                 mode="lines",
-                name="risk_score",
+                name="Operational risk proxy",
             ),
             secondary_y=True,
         )
@@ -245,7 +289,7 @@ def plot_target_and_risk(data: pd.DataFrame, risk: pd.DataFrame, target: str, fr
                     x=critical["datetime"],
                     y=critical["risk_score"],
                     mode="markers",
-                    name="high/critical risk",
+                    name="High/critical proxy score",
                 ),
                 secondary_y=True,
             )
@@ -254,15 +298,19 @@ def plot_target_and_risk(data: pd.DataFrame, risk: pd.DataFrame, target: str, fr
         height=520,
         hovermode="x unified",
         legend=dict(orientation="h"),
+        title=f"{target_label} ({unit}) and operational risk proxy (0-100)",
     )
-    fig.update_yaxes(title_text=target, secondary_y=False)
-    fig.update_yaxes(title_text="Risk proxy score", range=[0, 100], secondary_y=True)
+    fig.update_yaxes(title_text=f"{target_label} ({unit})", secondary_y=False)
+    fig.update_yaxes(title_text="Operational risk proxy (0-100)", range=[0, 100], secondary_y=True)
+    add_plotly_source_footer(fig, f"{source_text}<br>{RISK_SOURCE}")
 
     st.plotly_chart(fig, use_container_width=True)
 
 
 def show_risk_events(risk: pd.DataFrame) -> None:
-    st.subheader("Risk events")
+    st.subheader("Operational risk proxy events")
+    st.warning("Risk is a proxy, not a confirmed failure probability.")
+    st.caption("Risk legend: low 0-35 | medium 35-60 | high 60-80 | critical 80-100.")
 
     if risk.empty:
         st.warning("Risk score data is missing.")
@@ -327,12 +375,20 @@ def show_risk_events(risk: pd.DataFrame) -> None:
             .reset_index()
         )
         component_mean.columns = ["component", "mean_score"]
-        fig = px.bar(component_mean, x="component", y="mean_score", title="Average risk-score components")
+        fig = px.bar(
+            component_mean,
+            x="component",
+            y="mean_score",
+            title="Average operational risk proxy components (0-1)",
+            labels={"component": "Risk component", "mean_score": "Mean component score (0-1)"},
+        )
+        add_plotly_source_footer(fig, RISK_SOURCE)
         st.plotly_chart(fig, use_container_width=True)
 
 
-def show_model_comparison(multistep: pd.DataFrame) -> None:
-    st.subheader("Forecasting model comparison")
+def show_model_comparison(multistep: pd.DataFrame, target_label: str, unit: str) -> None:
+    st.subheader(f"{target_label}: forecasting model comparison")
+    st.caption("Each horizon is predicted directly using information available at the forecast origin.")
 
     if multistep.empty:
         st.warning("Multi-step result file is missing.")
@@ -348,7 +404,10 @@ def show_model_comparison(multistep: pd.DataFrame) -> None:
         data[col] = numeric(data[col])
 
     metric = st.selectbox("Metric", ["rmse", "mae", "mape", "r2"], index=0)
-    st.caption("Lower RMSE, MAE and MAPE are better. Higher R² is better.")
+    st.caption(
+        f"RMSE and MAE use {unit.lower()}; MAPE is a percentage; R-squared is dimensionless. "
+        "Lower error metrics and higher R-squared are better."
+    )
 
     if metric == "r2":
         best_idx = data.groupby(["horizon", "scenario"])["r2"].idxmax()
@@ -366,9 +425,10 @@ def show_model_comparison(multistep: pd.DataFrame) -> None:
         color="scenario_label",
         barmode="group",
         hover_data=["scenario", "model", "mae", "rmse", "mape", "r2"],
-        title=f"Best {metric.upper()} by horizon and scenario",
-        labels={"horizon_label": "Forecast horizon"},
+        title=f"{target_label}: best {metric.upper()} by prediction horizon and scenario",
+        labels={"horizon_label": "Prediction horizon", metric: f"{metric.upper()} ({unit})" if metric in {"rmse", "mae"} else metric.upper()},
     )
+    add_plotly_source_footer(fig, WEATHER_ENRICHED_SOURCE)
     st.plotly_chart(fig, use_container_width=True)
 
     st.write("Best model per horizon")
@@ -415,9 +475,19 @@ def show_model_comparison(multistep: pd.DataFrame) -> None:
     else:
         st.info("Baseline or weather-enriched scenario is missing.")
 
+    if target_label == "Grid injection":
+        st.warning(
+            "Grid injection results are credible primarily at short horizons. "
+            "Treat 24h as weak and 168h as exploratory."
+        )
+
 
 def show_weather_analysis(data: pd.DataFrame) -> None:
-    st.subheader("Weather alignment and weather features")
+    st.subheader("Historical weather alignment and features")
+    st.caption(
+        "Historical Open-Meteo reanalysis supplies 2024-2025 model features. "
+        "IPMA supplies separate operational/recent weather context."
+    )
 
     summary = load_csv(str(REPORTS_DIR / "weather/weather_alignment_summary.csv"))
 
@@ -438,7 +508,16 @@ def show_weather_analysis(data: pd.DataFrame) -> None:
         if selected:
             weather_data = aggregate_timeseries(data, "datetime", selected, "Daily mean")
             long = weather_data.melt(id_vars="datetime", value_vars=selected, var_name="variable", value_name="value")
-            fig = px.line(long, x="datetime", y="value", color="variable", title="Daily weather variables")
+            long["variable_label"] = long["variable"].map(WEATHER_LABELS).fillna(long["variable"])
+            fig = px.line(
+                long,
+                x="datetime",
+                y="value",
+                color="variable_label",
+                title="Daily mean historical Open-Meteo reanalysis variables",
+                labels={"datetime": "Date (UTC)", "value": "Value (units in legend)", "variable_label": "Variable"},
+            )
+            add_plotly_source_footer(fig, WEATHER_SOURCE)
             st.plotly_chart(fig, use_container_width=True)
 
     flag_cols = [col for col in ["heavy_rain_flag", "strong_wind_flag", "weather_available"] if col in data.columns]
@@ -450,8 +529,8 @@ def show_weather_analysis(data: pd.DataFrame) -> None:
         st.dataframe(pd.DataFrame([flag_summary]), use_container_width=True, hide_index=True)
 
     st.info(
-        "IPMA remains the official Portuguese source for current observations, warnings and forecasts. "
-        "Open-Meteo historical reanalysis is used only to provide hourly 2024–2025 weather features "
+        "IPMA operational/recent weather provides current observations, warnings and forecasts. "
+        "Historical Open-Meteo reanalysis provides hourly 2024–2025 weather features "
         "aligned with the E-REDES modelling window."
     )
 
@@ -508,7 +587,7 @@ The modelling scenarios include lag-based features, calendar/seasonal features, 
 
 ### Operational risk proxy
 
-The operational risk score is an explainable proxy indicator. It does not represent confirmed grid failures because no labelled outage or failure target is available.
+The operational risk score is an explainable proxy indicator, not a confirmed failure probability. No labelled outage or failure target is available.
 
 The score combines:
 
@@ -520,9 +599,9 @@ The score combines:
 
 ### Weather alignment
 
-IPMA is retained as the official Portuguese source for current observations, warnings and forecasts.
+IPMA operational/recent weather supplies current observations, warnings and forecasts.
 
-Open-Meteo historical reanalysis is used only for the 2024–2025 hourly weather alignment because the public IPMA endpoint used in the pipeline does not provide a complete historical hourly archive aligned with the E-REDES modelling window.
+Historical Open-Meteo reanalysis is used for the 2024–2025 hourly weather alignment because the public IPMA endpoint used in the pipeline does not provide a complete historical hourly archive aligned with the E-REDES modelling window.
 """
     )
 
@@ -559,7 +638,7 @@ def main() -> None:
 
     frequency = st.sidebar.radio("Chart granularity", ["Hourly", "Daily mean", "Weekly mean"], index=1)
 
-    show_kpis(data, risk, multistep, config["target"])
+    show_kpis(data, risk, multistep, config["target"], config["target_label"], config["unit"])
 
     tabs = st.tabs(
         [
@@ -573,13 +652,21 @@ def main() -> None:
     )
 
     with tabs[0]:
-        plot_target_and_risk(data, risk, config["target"], frequency)
+        plot_target_and_risk(
+            data,
+            risk,
+            config["target"],
+            config["target_label"],
+            config["unit"],
+            frequency,
+            config["source"],
+        )
 
     with tabs[1]:
         show_risk_events(risk)
 
     with tabs[2]:
-        show_model_comparison(multistep)
+        show_model_comparison(multistep, config["target_label"], config["unit"])
 
     with tabs[3]:
         show_weather_analysis(data)

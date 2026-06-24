@@ -31,6 +31,7 @@ def add_lag_features(
         return result
     result[datetime_col] = pd.to_datetime(result[datetime_col], errors="coerce", format="mixed")
     result = result.sort_values(datetime_col).reset_index(drop=True)
+    # Positive shifts expose only observations available before the current row.
     for lag in lags:
         if isinstance(lag, int) and lag > 0:
             result[f"{target_col}_lag_{lag}"] = result[target_col].shift(lag)
