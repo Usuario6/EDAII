@@ -20,6 +20,7 @@ from sklearn.preprocessing import StandardScaler
 from scripts.backtesting_common import MODEL_FACTORIES
 from src.models.evaluation import evaluate_regression, time_series_train_test_split
 from src.models.multistep import HORIZONS, create_multistep_feature_set, run_direct_forecast_experiment
+from src.utils.visualization import WEATHER_ENRICHED_SOURCE, save_figure_with_source
 
 LOGGER = logging.getLogger(__name__)
 SCENARIOS = ("with_lag1", "without_lag1", "calendar_seasonal")
@@ -105,8 +106,7 @@ def _plot_horizons(results: pd.DataFrame, output_path: Path, dataset: str) -> No
     axes[0].set(ylabel="MAE", title=f"Direct multi-step metrics: {dataset}")
     axes[1].set(xlabel="Forecast horizon (hours)", ylabel="RMSE", xticks=list(HORIZONS))
     axes[0].legend(fontsize=8)
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    save_figure_with_source(fig, output_path, WEATHER_ENRICHED_SOURCE)
     plt.close(fig)
 
 
@@ -117,11 +117,17 @@ def refresh_shared_reports(output_dir: Path) -> None:
         coverage = pd.read_csv(coverage_path)
         usable = bool(coverage["usable_for_historical_modelling"].astype(str).str.lower().eq("true").any())
         overlap = int(coverage["overlap_hours"].max())
+        source = str(coverage.get("weather_source", pd.Series(["historical weather"])).iloc[0])
+        source_label = "historical Open-Meteo reanalysis" if source == "open_meteo_reanalysis" else source
         weather_text = (
-            "# Weather coverage impact\n\n"
-            f"The aggregated IPMA table contains {int(coverage['weather_hourly_rows'].max())} hourly timestamps, "
+            "# Impact of Historical Weather Data on Model Performance\n\n"
+            "This report records whether historical weather features overlap the E-REDES modelling window.\n\n"
+            f"The aligned {source_label} table contains {int(coverage['weather_hourly_rows'].max())} hourly timestamps, "
             f"with {overlap} overlapping E-REDES hours. Historical weather enrichment was "
-            f"{'enabled' if usable else 'not enabled'} for modelling. No long-range filling or timestamp extrapolation was applied.\n"
+            f"{'enabled' if usable else 'not enabled'} for modelling. No long-range filling or timestamp extrapolation was applied.\n\n"
+            "IPMA operational/recent weather is a separate source and is not force-filled into the 2024-2025 training window.\n\n"
+            "## Known Limitations\n\n"
+            "Open-Meteo is auxiliary reanalysis rather than an official Portuguese station archive, and these features describe forecast-origin conditions rather than target-time weather forecasts.\n"
         )
         (output_dir / "weather_coverage_impact.md").write_text(weather_text, encoding="utf-8")
 
@@ -139,15 +145,15 @@ def refresh_shared_reports(output_dir: Path) -> None:
 
 def _write_report(results: pd.DataFrame, dependency: pd.DataFrame, output_path: Path, coverage_path: Path) -> None:
     lines = [
-        "# Direct multi-step forecasting report", "",
-        "## Purpose", "",
+        "# Direct Multi-Step Forecasting Report", "",
+        "## Evaluation Scope", "",
         "Direct models predict each horizon independently. This tests whether the nowcasting results remain useful when the latest lag is unavailable, without recursively feeding predictions back as observations.", "",
         "Horizons: 1, 6, 24, and 168 hours. Models: seasonal naive, Ridge, LASSO, Random Forest, and Gradient Boosting. Evaluation uses a chronological 80/20 holdout; rolling-origin evaluation is deferred because the full scenario grid would be computationally expensive.", "",
-        "## Best result per horizon", "",
+        "## Forecasting Results by Prediction Horizon", "",
     ]
     best = results.loc[results.groupby(["dataset", "horizon"])["rmse"].idxmin()].sort_values(["dataset", "horizon"])
     lines.extend(["```text", best[["dataset", "horizon", "scenario", "model", "mae", "rmse", "mape", "r2"]].round(3).to_string(index=False), "```", ""])
-    lines.extend(["## Lag-1 dependence", ""])
+    lines.extend(["## Impact of Recent Observations (Lag 1)", ""])
     lag_summary = dependency.groupby(["dataset", "horizon"])[["mae_change_pct", "rmse_change_pct"]].mean().reset_index()
     lines.extend(["```text", lag_summary.round(2).to_string(index=False), "```", ""])
     for dataset in ("consumption", "injection"):
@@ -161,10 +167,12 @@ def _write_report(results: pd.DataFrame, dependency: pd.DataFrame, output_path: 
         weather_usable = bool(coverage["usable_for_historical_modelling"].astype(str).str.lower().eq("true").any())
     lines.extend(
         [
-            "## Weather and recommendation", "",
+            "## Interpretation of Results", "",
             f"Historically aligned weather features were {'usable' if weather_usable else 'not usable'} for this experiment. No weather values were force-filled across the 2024–2025 interval.",
             "Use the strongest with-lag model for next-hour nowcasting. For operational horizons where lag 1 is unavailable, select from the without-lag or calendar/seasonal scenarios and treat the performance loss as the realistic forecast cost.",
-            "Limitations: one chronological holdout, a bounded two-year energy window, no historically overlapping weather, and no holiday-locality features beyond national Portuguese holidays.", "",
+            "Injection forecasts are credible primarily at short horizons. The 24-hour result has weak explanatory power, and the 168-hour result is weak and exploratory; neither should be presented as established operational performance.",
+            "", "## Known Limitations", "",
+            "The experiment uses one chronological holdout and a bounded two-year energy window. Weather features describe forecast-origin conditions rather than target-time forecasts, and calendar features include national holidays without local detail.", "",
         ]
     )
     output_path.write_text("\n".join(lines), encoding="utf-8")

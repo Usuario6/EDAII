@@ -1,12 +1,12 @@
-# Direct multi-step forecasting report
+# Direct Multi-Step Forecasting Report
 
-## Purpose
+## Evaluation Scope
 
 Direct models predict each horizon independently. This tests whether the nowcasting results remain useful when the latest lag is unavailable, without recursively feeding predictions back as observations.
 
 Horizons: 1, 6, 24, and 168 hours. Models: seasonal naive, Ridge, LASSO, Random Forest, and Gradient Boosting. Evaluation uses a chronological 80/20 holdout; rolling-origin evaluation is deferred because the full scenario grid would be computationally expensive.
 
-## Best result per horizon
+## Forecasting Results by Prediction Horizon
 
 ```text
     dataset  horizon          scenario             model        mae       rmse   mape    r2
@@ -20,7 +20,7 @@ consumption      168  weather_enriched     random_forest  71841.296  99941.940  
   injection      168 calendar_seasonal             ridge 444514.461 529807.291 63.046 0.036
 ```
 
-## Lag-1 dependence
+## Impact of Recent Observations (Lag 1)
 
 ```text
     dataset  horizon  mae_change_pct  rmse_change_pct
@@ -54,8 +54,12 @@ horizon
 168    295.42
 ```
 
-## Weather and recommendation
+## Interpretation of Results
 
 Historically aligned weather features were usable for this experiment. No weather values were force-filled across the 2024–2025 interval.
 Use the strongest with-lag model for next-hour nowcasting. For operational horizons where lag 1 is unavailable, select from the without-lag or calendar/seasonal scenarios and treat the performance loss as the realistic forecast cost.
-Limitations: one chronological holdout, a bounded two-year energy window, no historically overlapping weather, and no holiday-locality features beyond national Portuguese holidays.
+Injection forecasts are credible primarily at short horizons. The 24-hour result has weak explanatory power, and the 168-hour result is weak and exploratory; neither should be presented as established operational performance.
+
+## Known Limitations
+
+The experiment uses one chronological holdout and a bounded two-year energy window. Weather features describe forecast-origin conditions rather than target-time forecasts, and calendar features include national holidays without local detail.

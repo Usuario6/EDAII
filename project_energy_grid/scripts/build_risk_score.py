@@ -13,6 +13,7 @@ import pandas as pd
 from src.config import GOLD_DATA_DIR, REPORTS_DIR
 from src.models.risk_score import build_risk_score, summarize_risk_scores
 from src.utils.io import save_dataframe
+from src.utils.visualization import RISK_SOURCE, save_figure_with_source
 
 
 OUTPUT_DIR = REPORTS_DIR / "risk"
@@ -37,18 +38,17 @@ def _plot_risk(frame: pd.DataFrame, output_path: Path, title: str) -> None:
     ax.set_xlabel("Datetime")
     ax.set_ylabel("Risk proxy score")
     ax.set_ylim(0, 100)
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    save_figure_with_source(fig, output_path, RISK_SOURCE)
     plt.close(fig)
 
 
 def _write_report(summary: pd.DataFrame, output_path: Path) -> None:
     lines = [
-        "# Operational risk proxy score report",
+        "# Operational Risk Proxy Report",
         "",
-        "## Purpose",
+        "## Scope and Interpretation",
         "",
-        "This report creates an operational risk proxy score for electricity consumption and energy injection.",
+        "This report creates an operational risk proxy score for electricity consumption and grid injection.",
         "",
         "The score does not represent a real probability of grid failure because the current project has no labelled failure events.",
         "",
@@ -60,7 +60,7 @@ def _write_report(summary: pd.DataFrame, output_path: Path) -> None:
         "- outlier detection;",
         "- weather flags, only where historically available.",
         "",
-        "## Formula logic",
+        "## Operational Risk Proxy: How It Is Calculated",
         "",
         "The score is scaled from 0 to 100:",
         "",
@@ -83,19 +83,23 @@ def _write_report(summary: pd.DataFrame, output_path: Path) -> None:
         "| 60–80 | high |",
         "| 80–100 | critical |",
         "",
-        "## Summary",
+        "## Risk Score Results",
         "",
         "```text",
         summary.to_string(index=False),
         "```",
         "",
-        "## Interpretation",
+        "## Interpretation of Results",
         "",
         "The risk score should be interpreted as an explainable operational pressure indicator, not as confirmed outage prediction.",
         "",
         "High values identify timestamps where the system behaviour is unusual, elevated, or unstable relative to recent and historical patterns.",
         "",
-        "Weather contribution is currently limited because IPMA observations do not overlap with the 2024–2025 E-REDES modelling period.",
+        "Weather contribution uses historical Open-Meteo reanalysis for 2024–2025. IPMA observations remain operational/recent weather context and are not force-filled into the historical modelling period.",
+        "",
+        "## Known Limitations",
+        "",
+        "No labelled outage or failure events are available, so score thresholds are descriptive categories rather than calibrated failure probabilities.",
         "",
     ]
     output_path.write_text("\n".join(lines), encoding="utf-8")

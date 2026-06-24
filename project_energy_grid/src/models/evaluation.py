@@ -44,6 +44,7 @@ def time_series_train_test_split(df: pd.DataFrame, datetime_col: str, test_size:
     ordered = df.copy()
     ordered[datetime_col] = pd.to_datetime(ordered[datetime_col], errors="coerce", utc=True)
     ordered = ordered.dropna(subset=[datetime_col]).sort_values(datetime_col).reset_index(drop=True)
+    # Keep the latest contiguous observations entirely outside model fitting.
     split = max(1, min(len(ordered) - 1, int(len(ordered) * (1 - test_size))))
     if len(ordered) < 2:
         raise ValueError("At least two chronological observations are required")

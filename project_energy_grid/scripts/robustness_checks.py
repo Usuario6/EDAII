@@ -68,14 +68,18 @@ def _dataset_checks(name: str, path, target: str, features: list[str]) -> list[d
 
 
 def _write_model_selection_report() -> None:
-    lines = ["# Rolling-origin model selection report", ""]
+    lines = [
+        "# Rolling-Origin Backtesting Report", "",
+        "This report compares consumption and grid injection forecast models across expanding chronological folds. Metrics are reported in the target's E-REDES units unless shown as percentages.", "",
+    ]
     for name, (path, target, _) in SPECS.items():
         data = pd.read_parquet(path)
         results = pd.read_csv(OUTPUT_DIR / f"{name}_backtest_results.csv")
         summary = pd.read_csv(OUTPUT_DIR / f"{name}_backtest_summary.csv")
+        forecast_name = "Consumption Forecast Results" if name == "consumption" else "Grid Injection Forecast Results"
         lines.extend(
             [
-                f"## {name.title()}", "",
+                f"## {forecast_name}", "",
                 f"- Coverage: {data['datetime'].min()} to {data['datetime'].max()}",
                 f"- Hourly rows: {len(data):,}",
                 f"- Models: {', '.join(summary['model'])}",
@@ -87,10 +91,11 @@ def _write_model_selection_report() -> None:
         )
     lines.extend(
         [
-            "## Interpretation and limitations", "",
+            "## Interpretation of Results", "",
             "Lag-1 dominance is reported explicitly: strong degradation without it indicates that short-term persistence drives much of the score.",
             "The evaluation uses an expanding training window and non-overlapping chronological test windows; no random split is used.",
-            "The current weather observations do not overlap the E-REDES history, so weather is not included.",
+            "This rolling-origin baseline excludes weather by design. IPMA provides operational/recent weather context; separate historical Open-Meteo reanalysis is aligned to 2024-2025 for weather-enriched experiments.",
+            "", "## Known Limitations", "",
             "Results cover a bounded historical interval and do not prove performance during unseen structural changes.", "",
         ]
     )
